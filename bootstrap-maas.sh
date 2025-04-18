@@ -17,10 +17,6 @@ if [[ -z "$MAAS_IP" ]]; then
     echo "Detected IP address: $MAAS_IP"
 fi
 
-# Prompt for VLAN number
-read -p "Enter VLAN ID (e.g., 100): " VLAN_ID
-VLAN_ID=${VLAN_ID:-100}  # Default to 100 if not provided
-
 echo
 echo "==============================="
 echo "💣 Removing previous MAAS setup"
@@ -138,37 +134,18 @@ maas logout admin 2>/dev/null || true
 maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY"
 
 echo "==============================="
-echo "🌐 Enabling DHCP on VLAN $VLAN_ID"
+echo "🌐 Enabling DHCP on network interface"
 echo "==============================="
 
-# Directly retrieve Fabric, Subnet, and VLAN IDs
-echo "Getting Fabric, Subnet, and VLAN IDs..."
-FABRICS_JSON=$(maas admin fabrics read)
-FABRIC_ID=$(echo "$FABRICS_JSON" | jq -r '.[0].id // empty')
-SUBNETS_JSON=$(maas admin subnets read)
-SUBNET_ID=$(echo "$SUBNETS_JSON" | jq -r '.[0].id // empty')
+# Enable DHCP on the network interface directly
+# Assuming the network interface (eth0 or the one connected to your managed VLAN) is already connected to the appropriate network
+echo "Enabling DHCP on the detected network interface..."
 
-if [[ -z "$FABRIC_ID" || -z "$SUBNET_ID" ]]; then
-    echo "❌ Unable to retrieve valid FABRIC_ID or SUBNET_ID. Exiting."
-    exit 1
-fi
+# Update the network interface to enable DHCP without needing to manage VLANs manually
+maas admin interface update eth0 managed=true
 
-VLAN_TAG=$(maas admin vlan read "$FABRIC_ID" "$VLAN_ID" | jq -r '.vid')
-
-echo "FABRIC_ID: $FABRIC_ID"
-echo "SUBNET_ID: $SUBNET_ID"
-echo "VLAN_ID: $VLAN_ID"
-echo "VLAN_TAG (VID): $VLAN_TAG"
-
-echo "✅ Enabling DHCP on VLAN and updating subnet..."
-maas admin vlan update "$FABRIC_ID" "$VLAN_ID" dhcp_on=true
-maas admin subnet update "$SUBNET_ID" \
-  gateway_ip="${MAAS_IP}" \
-  dns_servers="10.0.0.10 10.0.0.11" \
-  allow_proxy=true \
-  active_discovery=true \
-  boot_file="pxelinux.0" \
-  next_server="${MAAS_IP}"
+# Enable DHCP (this will be applied to the interface itself, not a specific VLAN)
+maas admin subnet update 1 gateway_ip="${MAAS_IP}" dns_servers="10.0.0.10 10.0.0.11" allow_proxy=true active_discovery=true boot_file="pxelinux.0" next_server="${MAAS_IP}"
 
 echo "==============================="
 echo "✅ MAAS has been successfully set up!"

@@ -144,8 +144,10 @@ FABRIC_ID=$(maas admin fabrics read | jq -r '.[0].id')
 echo "FABRIC_ID: $FABRIC_ID"
 SUBNET_ID=$(maas admin subnets read | jq -r '.[0].id')
 echo "SUBNET_ID: $SUBNET_ID"
-VLAN_ID=$(maas admin subnet read $SUBNET_ID | jq -r '.vlan.id')
+VLAN_ID=$(maas admin subnet read "$SUBNET_ID" vlan=$SUBNET_ID | jq -r '.vlan.id')
+VLAN_TAG=$(maas admin vlan read "$FABRIC_ID" "$VLAN_ID" | jq -r '.vid')
 echo "VLAN_ID: $VLAN_ID"
+echo "VLAN_TAG (VID): $VLAN_TAG"
 
 maas admin vlan update $FABRIC_ID $VLAN_ID dhcp_on=true
 maas admin subnet update $SUBNET_ID \

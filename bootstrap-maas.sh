@@ -82,6 +82,7 @@ for i in {1..30}; do
         break
     fi
     sleep 2
+
 done
 
 echo "==============================="
@@ -123,7 +124,7 @@ echo "🔑 Logging into MAAS as CLI profile 'admin'"
 echo "==============================="
 
 API_KEY=$(sudo maas apikey --username admin)
-maas login admin "$MAAS_URL" "$API_KEY"
+maas login admin "http://localhost:5240/MAAS/" "$API_KEY"
 
 echo "==============================="
 echo "🌐 Enabling DHCP on default VLAN"

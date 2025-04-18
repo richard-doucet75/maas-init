@@ -123,7 +123,8 @@ echo "==============================="
 echo "🔑 Logging into MAAS as CLI profile 'admin'"
 echo "==============================="
 
-API_KEY=$(sudo maas apikey --username admin)
+sudo maas apikey --username admin > /tmp/maas_api_key.txt
+API_KEY=$(cat /tmp/maas_api_key.txt)
 
 if [[ -z "$API_KEY" ]]; then
   echo "❌ Failed to retrieve API key for MAAS admin user. Exiting."
@@ -131,8 +132,8 @@ if [[ -z "$API_KEY" ]]; then
 fi
 
 echo "Retrieved MAAS API key."
-maas logout admin 2>/dev/null || true
-maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY"
+sudo maas logout admin 2>/dev/null || true
+sudo maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY"
 
 echo "==============================="
 echo "🌐 Enabling DHCP on default VLAN"

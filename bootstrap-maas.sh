@@ -41,7 +41,7 @@ sudo apt-get install -y postgresql nginx
 
 echo
 echo "==============================="
-echo "📡 Ensuring PostgreSQL is running"
+echo "📱 Ensuring PostgreSQL is running"
 echo "==============================="
 
 sudo systemctl enable --now postgresql
@@ -60,7 +60,7 @@ EOF
 
 echo
 echo "==============================="
-echo "📥 Installing MAAS"
+echo "📅 Installing MAAS"
 echo "==============================="
 
 sudo snap install maas
@@ -79,6 +79,21 @@ echo "==============================="
 sudo maas init region+rack \
     --database-uri "postgres://maas:$PG_PASSWORD@localhost/maasdb" \
     --maas-url "$MAAS_URL"
+
+echo "==============================="
+echo "⏳ Waiting for MAAS API to become available on port 5240"
+echo "==============================="
+
+for i in {1..30}; do
+    if curl -sSf http://localhost:5240/MAAS/ >/dev/null; then
+        echo "✅ MAAS API is up!"
+        break
+    else
+        echo "⏳ Still waiting for MAAS API... (\$i/30)"
+        sleep 2
+    fi
+
+done
 
 echo "==============================="
 echo "🌐 Configuring NGINX reverse proxy"

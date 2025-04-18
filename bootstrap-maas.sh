@@ -138,18 +138,34 @@ echo "==============================="
 echo "🌐 Enabling DHCP on default VLAN"
 echo "==============================="
 
+# Wait up to 90 seconds for subnet discovery
+echo "⏳ Waiting for at least one subnet to be discovered by MAAS..."
+for i in {1..30}; do
+    SUBNETS_JSON=$(maas admin subnets read)
+    SUBNET_COUNT=$(echo "$SUBNETS_JSON" | jq 'length')
+
+    if [[ "$SUBNET_COUNT" -gt 0 ]]; then
+        echo "✅ Subnet discovered."
+        break
+    fi
+
+    echo "🔁 Still waiting for subnet discovery... ($i/30)"
+    sleep 3
+done
+
+# Exit if still no subnet found
+if [[ "$SUBNET_COUNT" -eq 0 ]]; then
+    echo "❌ No subnets were discovered after waiting. DHCP setup cannot continue."
+    exit 1
+fi
+
 echo "Getting Fabric, Subnet, and VLAN IDs..."
 FABRICS_JSON=$(maas admin fabrics read)
-SUBNETS_JSON=$(maas admin subnets read)
-
-echo "$FABRICS_JSON" | jq .
-echo "$SUBNETS_JSON" | jq .
-
 FABRIC_ID=$(echo "$FABRICS_JSON" | jq -r '.[0].id // empty')
 SUBNET_ID=$(echo "$SUBNETS_JSON" | jq -r '.[0].id // empty')
 
 if [[ -z "$FABRIC_ID" || -z "$SUBNET_ID" ]]; then
-    echo "❌ No fabrics or subnets were returned from MAAS. You may need to wait for a discovered network, or manually import a subnet."
+    echo "❌ Unable to retrieve valid FABRIC_ID or SUBNET_ID. Exiting."
     exit 1
 fi
 
@@ -160,6 +176,16 @@ echo "FABRIC_ID: $FABRIC_ID"
 echo "SUBNET_ID: $SUBNET_ID"
 echo "VLAN_ID: $VLAN_ID"
 echo "VLAN_TAG (VID): $VLAN_TAG"
+
+echo "✅ Enabling DHCP on VLAN and updating subnet..."
+maas admin vlan update "$FABRIC_ID" "$VLAN_ID" dhcp_on=true
+maas admin subnet update "$SUBNET_ID" \
+  gateway_ip="${MAAS_IP}" \
+  dns_servers="10.0.0.10 10.0.0.11" \
+  allow_proxy=true \
+  active_discovery=true \
+  boot_file="pxelinux.0" \
+  next_server="${MAAS_IP}"
 
 echo "==============================="
 echo "✅ MAAS has been successfully set up!"

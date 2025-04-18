@@ -33,7 +33,7 @@ sudo rm -rf /etc/postgresql /var/lib/postgresql /var/log/postgresql
 
 echo
 echo "==============================="
-echo "📆 Installing PostgreSQL"
+echo "🗕 Installing PostgreSQL"
 echo "==============================="
 
 sudo apt-get update
@@ -67,7 +67,7 @@ sudo snap install maas
 
 echo
 echo "==============================="
-echo "🪿 Wiping MAAS Snap state to ensure clean init"
+echo "🦡 Wiping MAAS Snap state to ensure clean init"
 echo "==============================="
 
 sudo rm -rf /var/snap/maas/common/* || true
@@ -79,21 +79,6 @@ echo "==============================="
 sudo maas init region+rack \
     --database-uri "postgres://maas:$PG_PASSWORD@localhost/maasdb" \
     --maas-url "$MAAS_URL"
-
-echo "==============================="
-echo "📅 Waiting for MAAS API to become available at $MAAS_URL"
-echo "==============================="
-
-for i in {1..30}; do
-    if curl -sSf "$MAAS_URL" >/dev/null; then
-        echo "✅ MAAS API is up!"
-        break
-    else
-        echo "⏳ Still waiting for MAAS API... ($i/30)"
-        sleep 2
-    fi
-
-done
 
 echo "==============================="
 echo "👤 Creating MAAS admin user"

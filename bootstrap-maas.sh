@@ -33,11 +33,11 @@ sudo rm -rf /etc/postgresql /var/lib/postgresql /var/log/postgresql
 
 echo
 echo "==============================="
-echo "📦 Installing PostgreSQL + NGINX"
+echo "📆 Installing PostgreSQL"
 echo "==============================="
 
 sudo apt-get update
-sudo apt-get install -y postgresql nginx
+sudo apt-get install -y postgresql
 
 echo
 echo "==============================="
@@ -60,14 +60,14 @@ EOF
 
 echo
 echo "==============================="
-echo "📅 Installing MAAS"
+echo "🗓 Installing MAAS"
 echo "==============================="
 
 sudo snap install maas
 
 echo
 echo "==============================="
-echo "🧹 Wiping MAAS Snap state to ensure clean init"
+echo "🪟 Wiping MAAS Snap state to ensure clean init"
 echo "==============================="
 
 sudo rm -rf /var/snap/maas/common/* || true
@@ -81,7 +81,7 @@ sudo maas init region+rack \
     --maas-url "$MAAS_URL"
 
 echo "==============================="
-echo "⏳ Waiting for MAAS API to become available on port 5240"
+echo "📅 Waiting for MAAS API to become available on port 5240"
 echo "==============================="
 
 for i in {1..30}; do
@@ -94,38 +94,6 @@ for i in {1..30}; do
     fi
 
 done
-
-echo "==============================="
-echo "🌐 Configuring NGINX reverse proxy"
-echo "==============================="
-
-MAAS_PORT=5240
-
-sudo tee /etc/nginx/sites-available/maas >/dev/null <<EOF
-server {
-    listen 80;
-    server_name maas.jaded;
-
-    location /MAAS/ {
-        proxy_pass http://localhost:$MAAS_PORT/MAAS/;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-}
-EOF
-
-sudo ln -sf /etc/nginx/sites-available/maas /etc/nginx/sites-enabled/maas
-sudo nginx -t && {
-    if systemctl is-active --quiet nginx; then
-        sudo systemctl reload nginx
-    else
-        sudo systemctl start nginx
-    fi
-}
 
 echo "==============================="
 echo "👤 Creating MAAS admin user"

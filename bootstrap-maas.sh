@@ -72,39 +72,41 @@ echo "==============================="
 
 sudo rm -rf /var/snap/maas/common/* || true
 
-
-echo "==============================="
-echo "🎯 Updating embedded nginx to listen on port 80"
-echo "==============================="
-
-NGINX_CONF="/var/snap/maas/current/http/nginx.conf"
-
-# Backup original config
-sudo cp "$NGINX_CONF" "$NGINX_CONF.bak"
-
-# Update nginx to listen on port 80 if not already
-if ! grep -q "listen 80;" "$NGINX_CONF"; then
-    echo "Patching nginx.conf to listen on port 80..."
-    sudo sed -i 's/listen 5240;/listen 80;/' "$NGINX_CONF"
-fi
-
-echo "Restarting MAAS to apply embedded nginx config..."
-sudo snap restart maas
-sleep 5
-
-
 echo "==============================="
 echo "🚦 Initializing MAAS"
 echo "==============================="
 
 sudo maas init region+rack --database-uri "postgres://maas:$PG_PASSWORD@localhost/maasdb"
 
+
+echo "==============================="
+echo "🎯 Patching embedded nginx to listen on port 80"
+echo "==============================="
+
+NGINX_CONF="/var/snap/maas/current/http/nginx.conf"
+
+if [[ -f "$NGINX_CONF" ]]; then
+    echo "Backing up embedded nginx config..."
+    sudo cp "$NGINX_CONF" "$NGINX_CONF.bak"
+
+    if ! grep -q "listen 80;" "$NGINX_CONF"; then
+        echo "Updating nginx to listen on port 80..."
+        sudo sed -i 's/listen 5240;/listen 80;/' "$NGINX_CONF"
+    else
+        echo "Already listening on port 80."
+    fi
+
+    echo "Restarting MAAS to apply config..."
+    sudo snap restart maas
+else
+    echo "⚠️ nginx.conf not found at $NGINX_CONF — skipping patch."
+fi
+
 echo "==============================="
 echo "👤 Creating MAAS admin user"
 echo "==============================="
 
 sudo maas createadmin --username admin --password "$MAAS_PASSWORD" --email admin@maas.com
-
 
 echo "==============================="
 echo "✅ MAAS has been successfully set up!"

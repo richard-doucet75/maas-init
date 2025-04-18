@@ -124,6 +124,13 @@ echo "🔑 Logging into MAAS as CLI profile 'admin'"
 echo "==============================="
 
 API_KEY=$(sudo maas apikey --username admin)
+
+if [[ -z "$API_KEY" ]]; then
+  echo "❌ Failed to retrieve API key for MAAS admin user. Exiting."
+  exit 1
+fi
+
+echo "Retrieved MAAS API key."
 maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY"
 
 echo "==============================="

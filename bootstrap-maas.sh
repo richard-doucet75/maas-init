@@ -70,8 +70,7 @@ echo "==============================="
 echo "🧹 Wiping MAAS Snap state to ensure clean init"
 echo "==============================="
 
-# Make sure MAAS supervisor is stopped before removing state
-sudo systemctl stop snap.maas.supervisor.service || true
+sudo snap stop maas || true
 sudo rm -rf /var/snap/maas/common/maas
 
 echo

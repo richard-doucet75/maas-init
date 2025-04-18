@@ -132,7 +132,7 @@ fi
 
 echo "Retrieved MAAS API key."
 maas logout admin 2>/dev/null || true
-maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY""
+maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY"
 
 echo "==============================="
 echo "🌐 Enabling DHCP on default VLAN"

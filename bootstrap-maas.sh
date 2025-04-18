@@ -2,6 +2,7 @@
 
 set -e
 
+# Prompt for user input
 read -s -p "Enter PostgreSQL password: " PG_PASSWORD
 echo
 read -s -p "Enter MAAS admin password: " MAAS_PASSWORD
@@ -16,6 +17,9 @@ if [[ -z "$MAAS_IP" ]]; then
     MAAS_IP=$(hostname -I | awk '{print $1}')
     echo "Detected IP address: $MAAS_IP"
 fi
+
+read -p "Enter VLAN ID to enable DHCP on (default: 0): " VLAN_ID
+VLAN_ID=${VLAN_ID:-0}
 
 echo
 echo "==============================="
@@ -116,7 +120,6 @@ echo "==============================="
 
 sudo maas createadmin --username admin --password "$MAAS_PASSWORD" --email admin@maas.com
 
-# DHCP Configuration Section
 echo "==============================="
 echo "🔑 Logging into MAAS as CLI profile 'admin'"
 echo "==============================="
@@ -134,18 +137,34 @@ maas logout admin 2>/dev/null || true
 maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY"
 
 echo "==============================="
-echo "🌐 Enabling DHCP on network interface"
+echo "🌐 Enabling DHCP on subnet"
 echo "==============================="
 
-# Enable DHCP on the network interface directly
-# Assuming the network interface (eth0 or the one connected to your managed VLAN) is already connected to the appropriate network
-echo "Enabling DHCP on the detected network interface..."
+# Auto-detect subnet that contains the MAAS IP
+SUBNET_ID=$(maas admin subnets read | jq -r --arg MAAS_IP "$MAAS_IP" '
+  .[] | select(.cidr != null and ($MAAS_IP | test("^" + (.cidr | split("/")[0] | split(".")[0:3] | join("\\."))))) | .id' | head -n1)
 
-# Update the network interface to enable DHCP without needing to manage VLANs manually
-maas admin interface update eth0 managed=true
+if [[ -z "$SUBNET_ID" ]]; then
+    echo "❌ Failed to detect subnet for IP $MAAS_IP. Exiting."
+    exit 1
+fi
 
-# Enable DHCP (this will be applied to the interface itself, not a specific VLAN)
-maas admin subnet update 1 gateway_ip="${MAAS_IP}" dns_servers="10.0.0.10 10.0.0.11" allow_proxy=true active_discovery=true boot_file="pxelinux.0" next_server="${MAAS_IP}"
+# Extract Fabric ID from subnet
+FABRIC_ID=$(maas admin subnet read "$SUBNET_ID" | jq -r '.vlan.fabric_id')
+
+echo "Using Subnet ID: $SUBNET_ID, Fabric ID: $FABRIC_ID, VLAN ID: $VLAN_ID"
+
+# Enable DHCP on the VLAN
+maas admin vlan update "$FABRIC_ID" "$VLAN_ID" dhcp_on=true
+
+# Update subnet with DHCP configuration
+maas admin subnet update "$SUBNET_ID" \
+    gateway_ip="${MAAS_IP}" \
+    dns_servers="10.0.0.10 10.0.0.11" \
+    allow_proxy=true \
+    active_discovery=true \
+    boot_file="pxelinux.0" \
+    next_server="${MAAS_IP}"
 
 echo "==============================="
 echo "✅ MAAS has been successfully set up!"

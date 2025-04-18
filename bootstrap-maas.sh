@@ -97,7 +97,8 @@ server {
     server_name maas.jaded;
 
     location /MAAS/ {
-        proxy_pass http://localhost:$MAAS_PORT/MAAS/;
+        rewrite ^/MAAS/(.*)$ /$1 break;
+        proxy_pass http://localhost:$MAAS_PORT/;
         proxy_http_version 1.1;
 
         proxy_set_header Host \$host;

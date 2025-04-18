@@ -89,16 +89,13 @@ echo "==============================="
 echo "🌐 Configuring NGINX reverse proxy"
 echo "==============================="
 
-MAAS_PORT=5240
-
 sudo tee /etc/nginx/sites-available/maas >/dev/null <<EOF
 server {
     listen 80;
     server_name maas.jaded;
 
-    location /MAAS/ {
-        rewrite ^/MAAS/(.*)$ /$1 break;
-        proxy_pass http://localhost:$MAAS_PORT/;
+    location / {
+        proxy_pass http://localhost:5240/;
         proxy_http_version 1.1;
 
         proxy_set_header Host \$host;
@@ -111,7 +108,7 @@ server {
 EOF
 
 sudo ln -sf /etc/nginx/sites-available/maas /etc/nginx/sites-enabled/maas
-sudo nginx -t && sudo systemctl restart nginx
+sudo rm -f /etc/nginx/sites-enabled/default
 
 echo "==============================="
 echo "👤 Creating MAAS admin user"

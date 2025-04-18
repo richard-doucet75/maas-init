@@ -140,6 +140,12 @@ echo "==============================="
 echo "🌐 Enabling DHCP on subnet"
 echo "==============================="
 
+echo "🔐 Verifying MAAS login and API access..."
+if ! maas admin whoami >/dev/null 2>&1; then
+  echo "❌ MAAS CLI not authenticated. Please check your login and API key."
+  exit 1
+fi
+
 # Attempt to find an existing subnet that matches the MAAS IP
 SUBNET_ID=$(maas admin subnets read 2>/dev/null | jq -r --arg MAAS_IP "$MAAS_IP" '
   .[] | select(.cidr != null and ($MAAS_IP | startswith(.cidr | split("/")[0]))) | .id' | head -n1)
@@ -153,39 +159,37 @@ if [[ -z "$SUBNET_ID" ]]; then
   # Try to find or create the fabric
   FABRIC_NAME="fabric-0"
   FABRIC_JSON=$(maas admin fabrics read 2>/dev/null || echo "")
-  if [[ -z "$FABRIC_JSON" ]]; then
-    echo "❌ Failed to read fabrics. Is MAAS running and logged in?"
-    exit 1
-  fi
-
   FABRIC_ID=$(echo "$FABRIC_JSON" | jq -r --arg name "$FABRIC_NAME" '.[] | select(.name == $name) | .id')
 
   if [[ -z "$FABRIC_ID" ]]; then
     echo "⚠️ Fabric '$FABRIC_NAME' not found. Creating it..."
-    FABRIC_CREATE_JSON=$(maas admin fabrics create name="$FABRIC_NAME" 2>/dev/null || echo "")
-    FABRIC_ID=$(echo "$FABRIC_CREATE_JSON" | jq -r '.id')
-
-    if [[ -z "$FABRIC_ID" ]]; then
-      echo "❌ Failed to create fabric '$FABRIC_NAME'. Exiting."
+    FABRIC_CREATE_JSON=$(maas admin fabrics create name="$FABRIC_NAME" 2>&1)
+    if echo "$FABRIC_CREATE_JSON" | jq -e .id >/dev/null 2>&1; then
+      FABRIC_ID=$(echo "$FABRIC_CREATE_JSON" | jq -r '.id')
+      echo "✅ Created fabric '$FABRIC_NAME' with ID $FABRIC_ID"
+    else
+      echo "❌ Failed to create fabric '$FABRIC_NAME'."
+      echo "↪ MAAS response: $FABRIC_CREATE_JSON"
       exit 1
     fi
-
-    echo "✅ Created fabric '$FABRIC_NAME' with ID $FABRIC_ID"
+  else
+    echo "✅ Found existing fabric '$FABRIC_NAME' with ID $FABRIC_ID"
   fi
 
   # Check if VLAN exists or create it
   VLAN_EXISTS=$(maas admin vlan read "$FABRIC_ID" "$VLAN_ID" 2>/dev/null || echo "")
   if [[ -z "$VLAN_EXISTS" ]]; then
     echo "⚠️ VLAN ID $VLAN_ID not found on fabric $FABRIC_NAME. Creating it..."
-    VLAN_CREATE_JSON=$(maas admin vlan create fabric=$FABRIC_ID vid=$VLAN_ID name="untagged-$VLAN_ID" mtu=1500 dhcp_on=false primary_rack="" 2>/dev/null || echo "")
-    VLAN_CREATED=$(echo "$VLAN_CREATE_JSON" | jq -r '.id')
-
-    if [[ -z "$VLAN_CREATED" ]]; then
-      echo "❌ Failed to create VLAN $VLAN_ID. Exiting."
+    VLAN_CREATE_JSON=$(maas admin vlan create fabric=$FABRIC_ID vid=$VLAN_ID name="untagged-$VLAN_ID" mtu=1500 dhcp_on=false primary_rack="" 2>&1)
+    if echo "$VLAN_CREATE_JSON" | jq -e .id >/dev/null 2>&1; then
+      echo "✅ VLAN $VLAN_ID created on fabric $FABRIC_NAME"
+    else
+      echo "❌ Failed to create VLAN $VLAN_ID. MAAS response:"
+      echo "$VLAN_CREATE_JSON"
       exit 1
     fi
-
-    echo "✅ VLAN $VLAN_ID created on fabric $FABRIC_NAME"
+  else
+    echo "✅ Found existing VLAN $VLAN_ID on fabric $FABRIC_NAME"
   fi
 
   # Create the subnet
@@ -193,16 +197,16 @@ if [[ -z "$SUBNET_ID" ]]; then
     cidr="$BASE_CIDR" \
     gateway_ip="$MAAS_IP" \
     dns_servers="10.0.0.10 10.0.0.11" \
-    vlan="$VLAN_ID" 2>/dev/null || echo "")
+    vlan="$VLAN_ID" 2>&1)
 
-  SUBNET_ID=$(echo "$SUBNET_CREATE_JSON" | jq -r '.id')
-
-  if [[ -z "$SUBNET_ID" ]]; then
-    echo "❌ Failed to create subnet $BASE_CIDR. Exiting."
+  if echo "$SUBNET_CREATE_JSON" | jq -e .id >/dev/null 2>&1; then
+    SUBNET_ID=$(echo "$SUBNET_CREATE_JSON" | jq -r '.id')
+    echo "✅ Subnet $BASE_CIDR registered with ID $SUBNET_ID"
+  else
+    echo "❌ Failed to create subnet $BASE_CIDR. MAAS response:"
+    echo "$SUBNET_CREATE_JSON"
     exit 1
   fi
-
-  echo "✅ Subnet $BASE_CIDR registered with ID $SUBNET_ID"
 else
   echo "✅ Found existing subnet for $MAAS_IP (ID: $SUBNET_ID)"
   FABRIC_ID=$(maas admin subnet read "$SUBNET_ID" | jq -r '.vlan.fabric_id')
@@ -221,7 +225,7 @@ maas admin subnet update "$SUBNET_ID" \
     active_discovery=true \
     boot_file="pxelinux.0" \
     next_server="${MAAS_IP}"
-    
+   
 echo "==============================="
 echo "✅ MAAS has been successfully set up!"
 echo "    Access it at: $MAAS_URL"

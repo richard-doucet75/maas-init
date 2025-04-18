@@ -140,24 +140,60 @@ echo "==============================="
 echo "🌐 Enabling DHCP on subnet"
 echo "==============================="
 
-# Auto-detect subnet that contains the MAAS IP
+# Attempt to find existing subnet
 SUBNET_ID=$(maas admin subnets read | jq -r --arg MAAS_IP "$MAAS_IP" '
-  .[] | select(.cidr != null and ($MAAS_IP | test("^" + (.cidr | split("/")[0] | split(".")[0:3] | join("\\."))))) | .id' | head -n1)
+  .[] | select(.cidr != null and ($MAAS_IP | startswith(.cidr | split("/")[0]))) | .id' | head -n1)
 
 if [[ -z "$SUBNET_ID" ]]; then
-    echo "❌ Failed to detect subnet for IP $MAAS_IP. Exiting."
+  echo "⚠️ No matching subnet found for $MAAS_IP. Attempting to create one..."
+
+  BASE_CIDR=$(echo "$MAAS_IP" | awk -F. '{printf "%s.%s.%s.0/24", $1, $2, $3}')
+  echo "→ Will create subnet: $BASE_CIDR"
+
+  # Assume default fabric
+  FABRIC_NAME="fabric-0"
+  FABRIC_ID=$(maas admin fabrics read | jq -r --arg name "$FABRIC_NAME" '.[] | select(.name == $name) | .id')
+
+  if [[ -z "$FABRIC_ID" ]]; then
+    echo "❌ Fabric '$FABRIC_NAME' not found. Exiting."
     exit 1
+  fi
+
+  # Confirm VLAN exists (or error out)
+  VLAN_EXISTS=$(maas admin vlan read "$FABRIC_ID" "$VLAN_ID" 2>/dev/null || echo "")
+  if [[ -z "$VLAN_EXISTS" ]]; then
+    echo "❌ VLAN ID $VLAN_ID does not exist on fabric $FABRIC_NAME. Exiting."
+    exit 1
+  fi
+
+  # Create subnet
+  maas admin subnet create \
+    cidr="$BASE_CIDR" \
+    gateway_ip="$MAAS_IP" \
+    dns_servers="10.0.0.10 10.0.0.11" \
+    vlan="$VLAN_ID"
+
+  # Re-fetch subnet ID
+  SUBNET_ID=$(maas admin subnets read | jq -r --arg cidr "$BASE_CIDR" '.[]
+    | select(.cidr == $cidr) | .id')
+
+  if [[ -z "$SUBNET_ID" ]]; then
+    echo "❌ Subnet creation failed. Exiting."
+    exit 1
+  fi
+
+  echo "✅ Subnet $BASE_CIDR registered as ID $SUBNET_ID"
 fi
 
-# Extract Fabric ID from subnet
-FABRIC_ID=$(maas admin subnet read "$SUBNET_ID" | jq -r '.vlan.fabric_id')
+# Get fabric ID (if not already done above)
+FABRIC_ID=${FABRIC_ID:-$(maas admin subnet read "$SUBNET_ID" | jq -r '.vlan.fabric_id')}
 
 echo "Using Subnet ID: $SUBNET_ID, Fabric ID: $FABRIC_ID, VLAN ID: $VLAN_ID"
 
-# Enable DHCP on the VLAN
+# Enable DHCP on VLAN
 maas admin vlan update "$FABRIC_ID" "$VLAN_ID" dhcp_on=true
 
-# Update subnet with DHCP configuration
+# Update subnet settings
 maas admin subnet update "$SUBNET_ID" \
     gateway_ip="${MAAS_IP}" \
     dns_servers="10.0.0.10 10.0.0.11" \

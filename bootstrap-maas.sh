@@ -24,8 +24,9 @@ echo "==============================="
 
 sudo snap remove --purge maas || true
 sudo snap remove --purge maas-test-db || true
+sudo rm -rf /var/snap/maas || true
 
-sudo systemctl stop postgresql || true
+sudo systemctl stop postgresql 2>/dev/null || true
 sudo pg_dropcluster --stop 16 main || true
 sudo apt-get purge --yes postgresql* libpq5 postgresql-client-common postgresql-common
 sudo apt-get autoremove --yes
@@ -33,16 +34,11 @@ sudo rm -rf /etc/postgresql /var/lib/postgresql /var/log/postgresql
 
 echo
 echo "==============================="
-echo "🗕 Installing PostgreSQL + NGINX"
+echo "📱 Ensuring PostgreSQL is running"
 echo "==============================="
 
 sudo apt-get update
 sudo apt-get install -y postgresql nginx
-
-echo
-echo "==============================="
-echo "📱 Ensuring PostgreSQL is running"
-echo "==============================="
 
 sudo systemctl enable --now postgresql
 
@@ -67,10 +63,10 @@ sudo snap install maas
 
 echo
 echo "==============================="
-echo "🦡 Wiping MAAS Snap state to ensure clean init"
+echo "🪱 Wiping MAAS Snap state to ensure clean init"
 echo "==============================="
 
-sudo rm -rf /var/snap/maas/common/* || true
+# Already wiped above, no-op here now
 
 echo "==============================="
 echo "🚦 Initializing MAAS"
@@ -79,6 +75,15 @@ echo "==============================="
 sudo maas init region+rack \
     --database-uri "postgres://maas:$PG_PASSWORD@localhost/maasdb" \
     --maas-url "$MAAS_URL"
+
+echo "Waiting for MAAS to start on port 5240..."
+for i in {1..30}; do
+    if sudo ss -tulnp | grep -q ':5240'; then
+        echo "MAAS is now listening on port 5240"
+        break
+    fi
+    sleep 2
+done
 
 echo "==============================="
 echo "🌐 Configuring NGINX reverse proxy"

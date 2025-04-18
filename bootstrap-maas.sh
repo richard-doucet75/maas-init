@@ -8,8 +8,8 @@ read -s PG_PASSWORD
 echo "Enter MAAS admin password:"
 read -s MAAS_PASSWORD
 
-read -p "Enter MAAS URL (default: http://maas.jaded/MAAS): " MAAS_URL
-MAAS_URL=${MAAS_URL:-http://maas.jaded/MAAS}
+read -p "Enter MAAS URL (default: http://maas.jaded/): " MAAS_URL
+MAAS_URL=${MAAS_URL:-http://maas.jaded/}
 
 read -p "Enter IP address for MAAS server (leave blank to auto-detect): " MAAS_IP
 if [[ -z "$MAAS_IP" ]]; then
@@ -23,11 +23,8 @@ echo "==============================="
 echo "💣 Removing previous MAAS setup"
 echo "==============================="
 
-# Remove MAAS snap and config
 sudo snap remove --purge maas || true
-sudo snap remove --purge maas-test-db || true
 
-# Stop and purge PostgreSQL
 sudo systemctl stop postgresql || true
 sudo pg_dropcluster --stop 16 main || true
 sudo apt-get purge --yes postgresql* libpq5 postgresql-client-common postgresql-common
@@ -70,6 +67,15 @@ sudo snap install maas
 
 echo
 echo "==============================="
+echo "🧹 Wiping MAAS Snap state to ensure clean init"
+echo "==============================="
+
+# Make sure MAAS supervisor is stopped before removing state
+sudo systemctl stop snap.maas.supervisor.service || true
+sudo rm -rf /var/snap/maas/common/maas
+
+echo
+echo "==============================="
 echo "🛠️ Configuring /etc/hosts"
 echo "==============================="
 
@@ -92,7 +98,7 @@ server {
     server_name maas.jaded;
 
     location / {
-        proxy_pass http://localhost:$MAAS_PORT/MAAS/;
+        proxy_pass http://localhost:$MAAS_PORT/;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -109,8 +115,8 @@ echo "🚦 Initializing MAAS"
 echo "==============================="
 
 sudo maas init region+rack \
-        --database-uri "postgres://maas:$PG_PASSWORD@localhost/maasdb" \
-        --maas-url "$MAAS_URL"
+  --database-uri "postgres://maas:$PG_PASSWORD@localhost/maasdb" \
+  --maas-url "$MAAS_URL"
 
 echo
 echo "==============================="

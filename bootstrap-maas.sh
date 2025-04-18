@@ -118,6 +118,25 @@ echo "==============================="
 
 sudo maas createadmin --username admin --password "$MAAS_PASSWORD" --email admin@maas.com
 
+# DHCP Configuration Section
+PROFILE="admin"
+echo "==============================="
+echo "🌐 Enabling DHCP on default VLAN"
+echo "==============================="
+
+FABRIC_ID=$(sudo maas \$PROFILE fabrics read | jq -r '.[0].id')
+VLAN_ID=$(sudo maas \$PROFILE vlans read \$FABRIC_ID | jq -r '.[0].id')
+SUBNET_ID=$(sudo maas \$PROFILE subnets read | jq -r '.[0].id')
+
+sudo maas \$PROFILE vlan update \$FABRIC_ID \$VLAN_ID dhcp_on=true
+sudo maas \$PROFILE subnet update \$SUBNET_ID \
+  gateway_ip="${MAAS_IP}" \
+  dns_servers="8.8.8.8 1.1.1.1" \
+  allow_proxy=true \
+  active_discovery=true \
+  boot_file="pxelinux.0" \
+  next_server="${MAAS_IP}"
+
 echo "==============================="
 echo "✅ MAAS has been successfully set up!"
 echo "    Access it at: $MAAS_URL"

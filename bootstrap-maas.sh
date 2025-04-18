@@ -73,6 +73,10 @@ echo "==============================="
 sudo snap stop maas || true
 sudo rm -rf /var/snap/maas/common/maas
 
+# Prevent missing bootloader dir crash
+sudo mkdir -p /var/snap/maas/common/maas/image-storage/bootloaders
+sudo chown root:root /var/snap/maas/common/maas/image-storage/bootloaders
+
 echo
 echo "==============================="
 echo "🛠️ Configuring /etc/hosts"

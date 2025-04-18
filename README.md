@@ -1,26 +1,31 @@
-# MAAS Bootstrap Script
+# MAAS Bootstrap Script (Gold Standard v3)
 
-This script automates the full setup of a clean MAAS (Metal as a Service) environment with a manually configured PostgreSQL database and NGINX reverse proxy.
+This script automates a clean, repeatable setup of MAAS (Metal as a Service) using PostgreSQL and NGINX on Ubuntu 24.04. It's built to reflect production-like patterns while keeping things simple and transparent.
 
-## Features
+## 🔧 Features
 
-✅ Cleans up any previous MAAS and PostgreSQL installations  
-✅ Installs and configures PostgreSQL manually (no `maas-test-db`)  
-✅ Installs MAAS from Snap  
-✅ Creates PostgreSQL database and user  
-✅ Configures MAAS with a proper database URI  
-✅ Sets up NGINX as a reverse proxy for cleaner URLs (`http://maas.jaded/MAAS/`)  
-✅ Updates `/etc/hosts` with a chosen or detected IP  
-✅ Runs non-interactive `maas init`  
-✅ Creates an MAAS admin user
+- 💣 Cleans any previous MAAS and PostgreSQL install
+- 📦 Installs PostgreSQL 16 and MAAS 3.6 from Snap
+- 🧑 Creates PostgreSQL role/database for MAAS
+- 🌐 Configures NGINX reverse proxy (MAAS accessible at `http://maas.jaded/`)
+- 🚦 Initializes MAAS with full non-interactive setup
+- 🧹 Automatically handles Snap state wipe and directory recreation to prevent known startup crashes
 
-## Requirements
+## ✅ Fixes / Improvements in v3
 
-- Ubuntu 22.04 or 24.04 LTS
-- Run as a user with `sudo` privileges
-- Clean install is recommended
+- Replaces old `systemctl stop snap.maas.supervisor.service` with `snap stop maas`
+- Ensures the required `/var/snap/maas/common/maas/image-storage/bootloaders` directory exists (fixes `FileNotFoundError`)
+- Script works cleanly on MAAS 3.6 + Ubuntu 24.04 (noble)
 
-## Usage
+## 📋 Requirements
+
+- Ubuntu 24.04 LTS (tested)
+- Internet access (for Snap & APT installs)
+- Sudo privileges
+
+## 🚀 Usage
+
+Make it executable:
 
 ```bash
-./bootstrap-maas.sh
+chmod +x bootstrap-maas.sh

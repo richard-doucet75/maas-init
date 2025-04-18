@@ -104,7 +104,13 @@ server {
 EOF
 
 sudo ln -sf /etc/nginx/sites-available/maas /etc/nginx/sites-enabled/maas
-sudo nginx -t && sudo systemctl reload nginx
+sudo nginx -t && {
+    if systemctl is-active --quiet nginx; then
+        sudo systemctl reload nginx
+    else
+        sudo systemctl start nginx
+    fi
+}
 
 echo "==============================="
 echo "👤 Creating MAAS admin user"

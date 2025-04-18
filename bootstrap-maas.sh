@@ -17,6 +17,10 @@ if [[ -z "$MAAS_IP" ]]; then
     echo "Detected IP address: $MAAS_IP"
 fi
 
+# Prompt for VLAN number
+read -p "Enter VLAN ID (e.g., 100): " VLAN_ID
+VLAN_ID=${VLAN_ID:-100}  # Default to 100 if not provided
+
 echo
 echo "==============================="
 echo "💣 Removing previous MAAS setup"
@@ -82,7 +86,6 @@ for i in {1..30}; do
         break
     fi
     sleep 2
-
 done
 
 echo "==============================="
@@ -135,33 +138,14 @@ maas logout admin 2>/dev/null || true
 maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY"
 
 echo "==============================="
-echo "🌐 Enabling DHCP on default VLAN"
+echo "🌐 Enabling DHCP on VLAN $VLAN_ID"
 echo "==============================="
 
-# Wait up to 90 seconds for subnet discovery
-echo "⏳ Waiting for at least one subnet to be discovered by MAAS..."
-for i in {1..30}; do
-    SUBNETS_JSON=$(maas admin subnets read)
-    SUBNET_COUNT=$(echo "$SUBNETS_JSON" | jq 'length')
-
-    if [[ "$SUBNET_COUNT" -gt 0 ]]; then
-        echo "✅ Subnet discovered."
-        break
-    fi
-
-    echo "🔁 Still waiting for subnet discovery... ($i/30)"
-    sleep 3
-done
-
-# Exit if still no subnet found
-if [[ "$SUBNET_COUNT" -eq 0 ]]; then
-    echo "❌ No subnets were discovered after waiting. DHCP setup cannot continue."
-    exit 1
-fi
-
+# Directly retrieve Fabric, Subnet, and VLAN IDs
 echo "Getting Fabric, Subnet, and VLAN IDs..."
 FABRICS_JSON=$(maas admin fabrics read)
 FABRIC_ID=$(echo "$FABRICS_JSON" | jq -r '.[0].id // empty')
+SUBNETS_JSON=$(maas admin subnets read)
 SUBNET_ID=$(echo "$SUBNETS_JSON" | jq -r '.[0].id // empty')
 
 if [[ -z "$FABRIC_ID" || -z "$SUBNET_ID" ]]; then
@@ -169,7 +153,6 @@ if [[ -z "$FABRIC_ID" || -z "$SUBNET_ID" ]]; then
     exit 1
 fi
 
-VLAN_ID=$(maas admin subnet read "$SUBNET_ID" | jq -r '.vlan.id')
 VLAN_TAG=$(maas admin vlan read "$FABRIC_ID" "$VLAN_ID" | jq -r '.vid')
 
 echo "FABRIC_ID: $FABRIC_ID"

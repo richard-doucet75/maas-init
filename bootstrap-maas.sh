@@ -124,7 +124,7 @@ echo "🔑 Logging into MAAS as CLI profile 'admin'"
 echo "==============================="
 
 API_KEY=$(sudo maas apikey --username admin)
-maas login admin "http://localhost:5240/MAAS/" "$API_KEY"
+maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY""
 
 echo "==============================="
 echo "🌐 Enabling DHCP on default VLAN"

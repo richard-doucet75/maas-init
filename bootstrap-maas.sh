@@ -23,7 +23,6 @@ echo "💣 Removing previous MAAS setup"
 echo "==============================="
 
 sudo snap remove --purge maas || true
-sudo snap remove --purge maas-test-db || true
 sudo rm -rf /var/snap/maas || true
 
 sudo systemctl stop postgresql 2>/dev/null || true
@@ -119,19 +118,25 @@ echo "==============================="
 sudo maas createadmin --username admin --password "$MAAS_PASSWORD" --email admin@maas.com
 
 # DHCP Configuration Section
-PROFILE="admin"
+echo "==============================="
+echo "🔑 Logging into MAAS as CLI profile 'admin'"
+echo "==============================="
+
+API_KEY=$(sudo maas apikey --username admin)
+maas login admin "$MAAS_URL" "$API_KEY"
+
 echo "==============================="
 echo "🌐 Enabling DHCP on default VLAN"
 echo "==============================="
 
-FABRIC_ID=$(sudo maas \$PROFILE fabrics read | jq -r '.[0].id')
-VLAN_ID=$(sudo maas \$PROFILE vlans read \$FABRIC_ID | jq -r '.[0].id')
-SUBNET_ID=$(sudo maas \$PROFILE subnets read | jq -r '.[0].id')
+FABRIC_ID=$(maas admin fabrics read | jq -r '.[0].id')
+VLAN_ID=$(maas admin vlans read $FABRIC_ID | jq -r '.[0].id')
+SUBNET_ID=$(maas admin subnets read | jq -r '.[0].id')
 
-sudo maas \$PROFILE vlan update \$FABRIC_ID \$VLAN_ID dhcp_on=true
-sudo maas \$PROFILE subnet update \$SUBNET_ID \
+maas admin vlan update $FABRIC_ID $VLAN_ID dhcp_on=true
+maas admin subnet update $SUBNET_ID \
   gateway_ip="${MAAS_IP}" \
-  dns_servers="8.8.8.8 1.1.1.1" \
+  dns_servers="10.0.0.10 10.0.0.11" \
   allow_proxy=true \
   active_discovery=true \
   boot_file="pxelinux.0" \

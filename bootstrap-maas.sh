@@ -8,8 +8,8 @@ read -s PG_PASSWORD
 echo "Enter MAAS admin password:"
 read -s MAAS_PASSWORD
 
-read -p "Enter MAAS URL (default: http://maas.jaded/): " MAAS_URL
-MAAS_URL=${MAAS_URL:-http://maas.jaded/}
+read -p "Enter MAAS URL (default: http://maas.jaded/MAAS): " MAAS_URL
+MAAS_URL=${MAAS_URL:-http://maas.jaded/MAAS}
 
 read -p "Enter IP address for MAAS server (leave blank to auto-detect): " MAAS_IP
 if [[ -z "$MAAS_IP" ]]; then
@@ -100,8 +100,9 @@ server {
     listen 80;
     server_name maas.jaded;
 
-    location / {
-        proxy_pass http://localhost:$MAAS_PORT/;
+    location /MAAS/ {
+        proxy_pass http://localhost:$MAAS_PORT/MAAS/;
+        proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;

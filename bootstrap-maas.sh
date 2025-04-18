@@ -131,8 +131,8 @@ echo "🌐 Enabling DHCP on default VLAN"
 echo "==============================="
 
 FABRIC_ID=$(maas admin fabrics read | jq -r '.[0].id')
-VLAN_ID=$(maas admin vlans read $FABRIC_ID | jq -r '.[0].id')
 SUBNET_ID=$(maas admin subnets read | jq -r '.[0].id')
+VLAN_ID=$(maas admin subnet read $SUBNET_ID | jq -r '.vlan.id')
 
 maas admin vlan update $FABRIC_ID $VLAN_ID dhcp_on=true
 maas admin subnet update $SUBNET_ID \

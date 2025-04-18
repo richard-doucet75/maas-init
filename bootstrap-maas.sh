@@ -79,17 +79,6 @@ sudo chown root:root /var/snap/maas/common/maas/image-storage/bootloaders
 
 echo
 echo "==============================="
-echo "🛠️ Configuring /etc/hosts"
-echo "==============================="
-
-if ! grep -q "maas.jaded" /etc/hosts; then
-    echo "$MAAS_IP maas.jaded" | sudo tee -a /etc/hosts
-else
-    echo "maas.jaded already present in /etc/hosts"
-fi
-
-echo
-echo "==============================="
 echo "🌐 Configuring NGINX reverse proxy"
 echo "==============================="
 
@@ -100,13 +89,16 @@ server {
     listen 80;
     server_name maas.jaded;
 
-    location /MAAS/ {
-        proxy_pass http://localhost:$MAAS_PORT/MAAS/;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    }
+location /MAAS/ {
+    proxy_pass http://localhost:$MAAS_PORT/MAAS/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+    # Add these lines:
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
 }
 EOF
 

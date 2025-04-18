@@ -76,9 +76,9 @@ echo "==============================="
 echo "🚦 Initializing MAAS"
 echo "==============================="
 
-sudo maas init region+rack /
-        --database-uri "postgres://maas:$PG_PASSWORD@localhost/maasdb" /
-        --maas-url "$MAAS_URL"
+sudo maas init region+rack \
+    --database-uri "postgres://maas:$PG_PASSWORD@localhost/maasdb" \
+    --maas-url "$MAAS_URL"
 
 echo "==============================="
 echo "🎯 Patching embedded nginx to listen on port 80"

@@ -109,6 +109,7 @@ EOF
 
 sudo ln -sf /etc/nginx/sites-available/maas /etc/nginx/sites-enabled/maas
 sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl restart nginx
 
 echo "==============================="
 echo "👤 Creating MAAS admin user"

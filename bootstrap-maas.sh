@@ -7,8 +7,8 @@ echo
 read -s -p "Enter MAAS admin password: " MAAS_PASSWORD
 echo
 
-read -p "Enter MAAS URL (default: http://maas.jaded:5240/MAAS): " MAAS_URL
-MAAS_URL=${MAAS_URL:-http://maas.jaded:5240/MAAS}
+read -p "Enter MAAS URL (default: http://maas.jaded/MAAS): " MAAS_URL
+MAAS_URL=${MAAS_URL:-http://maas.jaded/MAAS}
 
 read -p "Enter IP address for MAAS server (leave blank to auto-detect): " MAAS_IP
 if [[ -z "$MAAS_IP" ]]; then
@@ -72,48 +72,40 @@ echo "==============================="
 
 sudo rm -rf /var/snap/maas/common/* || true
 
-echo
+
 echo "==============================="
-echo "🔧 Creating custom embedded NGINX config"
+echo "🎯 Updating embedded nginx to listen on port 80"
 echo "==============================="
 
-CUSTOM_NGINX_DIR="/var/snap/maas/common/custom-nginx"
-CUSTOM_NGINX_FILE="$CUSTOM_NGINX_DIR/custom.conf"
-MAIN_NGINX_CONF="/var/snap/maas/current/http/nginx.conf"
+NGINX_CONF="/var/snap/maas/current/http/nginx.conf"
 
-sudo mkdir -p "$CUSTOM_NGINX_DIR"
+# Backup original config
+sudo cp "$NGINX_CONF" "$NGINX_CONF.bak"
 
-sudo tee "$CUSTOM_NGINX_FILE" >/dev/null <<EOF
-location /MAAS/ {
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade \$http_upgrade;
-    proxy_set_header Connection "upgrade";
-}
-EOF
-
-# Only inject include if not already present
-if ! grep -q "custom-nginx" "$MAIN_NGINX_CONF"; then
-    echo "Adding include to embedded nginx.conf"
-    sudo sed -i '/http {/a \\n    include /var/snap/maas/common/custom-nginx/*.conf;' "$MAIN_NGINX_CONF"
+# Update nginx to listen on port 80 if not already
+if ! grep -q "listen 80;" "$NGINX_CONF"; then
+    echo "Patching nginx.conf to listen on port 80..."
+    sudo sed -i 's/listen 5240;/listen 80;/' "$NGINX_CONF"
 fi
 
-echo
+echo "Restarting MAAS to apply embedded nginx config..."
+sudo snap restart maas
+sleep 5
+
+
 echo "==============================="
 echo "🚦 Initializing MAAS"
 echo "==============================="
 
 sudo maas init region+rack --database-uri "postgres://maas:$PG_PASSWORD@localhost/maasdb"
 
-echo
 echo "==============================="
 echo "👤 Creating MAAS admin user"
 echo "==============================="
 
 sudo maas createadmin --username admin --password "$MAAS_PASSWORD" --email admin@maas.com
 
-sudo snap restart maas
 
-echo
 echo "==============================="
 echo "✅ MAAS has been successfully set up!"
 echo "    Access it at: $MAAS_URL"

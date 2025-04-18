@@ -133,8 +133,8 @@ if [[ -z "$API_KEY" ]]; then
 fi
 
 echo "Retrieved MAAS API key."
-sudo maas logout admin 2>/dev/null || true
-sudo maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY"
+maas logout admin 2>/dev/null || true
+maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY"
 
 echo "==============================="
 echo "🌐 Enabling DHCP on default VLAN"

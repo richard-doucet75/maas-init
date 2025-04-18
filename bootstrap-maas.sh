@@ -67,7 +67,7 @@ sudo snap install maas
 
 echo
 echo "==============================="
-echo "🪟 Wiping MAAS Snap state to ensure clean init"
+echo "🪿 Wiping MAAS Snap state to ensure clean init"
 echo "==============================="
 
 sudo rm -rf /var/snap/maas/common/* || true
@@ -81,15 +81,15 @@ sudo maas init region+rack \
     --maas-url "$MAAS_URL"
 
 echo "==============================="
-echo "📅 Waiting for MAAS API to become available on port 5240"
+echo "📅 Waiting for MAAS API to become available at $MAAS_URL"
 echo "==============================="
 
 for i in {1..30}; do
-    if curl -sSf http://localhost:5240/MAAS/ >/dev/null; then
+    if curl -sSf "$MAAS_URL" >/dev/null; then
         echo "✅ MAAS API is up!"
         break
     else
-        echo "⏳ Still waiting for MAAS API... (\$i/30)"
+        echo "⏳ Still waiting for MAAS API... ($i/30)"
         sleep 2
     fi
 

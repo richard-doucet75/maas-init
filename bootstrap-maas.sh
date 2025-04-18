@@ -33,11 +33,11 @@ sudo rm -rf /etc/postgresql /var/lib/postgresql /var/log/postgresql
 
 echo
 echo "==============================="
-echo "📦 Installing PostgreSQL"
+echo "📦 Installing PostgreSQL + NGINX"
 echo "==============================="
 
 sudo apt-get update
-sudo apt-get install -y postgresql
+sudo apt-get install -y postgresql nginx
 
 echo
 echo "==============================="
@@ -81,27 +81,30 @@ sudo maas init region+rack \
     --maas-url "$MAAS_URL"
 
 echo "==============================="
-echo "🎯 Patching embedded nginx to listen on port 80"
+echo "🌐 Configuring NGINX reverse proxy"
 echo "==============================="
 
-NGINX_CONF="/var/snap/maas/current/http/nginx.conf"
+MAAS_PORT=5240
 
-if [[ -f "$NGINX_CONF" ]]; then
-    echo "Backing up embedded nginx config..."
-    sudo cp "$NGINX_CONF" "$NGINX_CONF.bak"
+sudo tee /etc/nginx/sites-available/maas >/dev/null <<EOF
+server {
+    listen 80;
+    server_name maas.jaded;
 
-    if ! grep -q "listen 80;" "$NGINX_CONF"; then
-        echo "Updating nginx to listen on port 80..."
-        sudo sed -i 's/listen 5240;/listen 80;/' "$NGINX_CONF"
-    else
-        echo "Already listening on port 80."
-    fi
+    location /MAAS/ {
+        proxy_pass http://localhost:$MAAS_PORT/MAAS/;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+EOF
 
-    echo "Restarting MAAS to apply config..."
-    sudo snap restart maas
-else
-    echo "⚠️ nginx.conf not found at $NGINX_CONF — skipping patch."
-fi
+sudo ln -sf /etc/nginx/sites-available/maas /etc/nginx/sites-enabled/maas
+sudo nginx -t && sudo systemctl reload nginx
 
 echo "==============================="
 echo "👤 Creating MAAS admin user"

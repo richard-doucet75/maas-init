@@ -7,8 +7,8 @@ echo
 read -s -p "Enter MAAS admin password: " MAAS_PASSWORD
 echo
 
-read -p "Enter MAAS URL (default: http://maas.jaded/MAAS): " MAAS_URL
-MAAS_URL=${MAAS_URL:-http://maas.jaded/MAAS}
+read -p "Enter MAAS URL (default: http://maas.jaded): " MAAS_URL
+MAAS_URL=${MAAS_URL:-http://maas.jaded}
 
 read -p "Enter IP address for MAAS server (leave blank to auto-detect): " MAAS_IP
 if [[ -z "$MAAS_IP" ]]; then

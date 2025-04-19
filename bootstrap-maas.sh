@@ -87,10 +87,5 @@ maas admin users read >/dev/null
 FABRIC_ID=$(maas admin fabrics create name="k8s-fabric" | jq -r '.id')
 
 # Create VLAN 40 on the new fabric (overwrite existing if needed)
-EXISTING_VLAN_ID=$(maas admin vlans read "$FABRIC_ID" | jq -r '.[] | select(.vid == 40) | .id')
-if [[ -n "$EXISTING_VLAN_ID" ]]; then
-  VLAN_ID="$EXISTING_VLAN_ID"
-  maas admin vlan update "$FABRIC_ID" 0 name="home-lab" mtu=1500 vid=40
-else
-  VLAN_ID=$(maas admin vlans create "$FABRIC_ID" name="home-lab" vid=40 mtu=1500 | jq -r '.id')
-fi
+maas admin vlan update "$FABRIC_ID" 0 name="home-lab" mtu=1500 vid=40
+

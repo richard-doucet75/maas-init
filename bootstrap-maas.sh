@@ -86,8 +86,7 @@ maas admin users read >/dev/null
 # Create fabric
 FABRIC_ID=$(maas admin fabrics create name="k8s-fabric" | jq -r '.id')
 
-# Update default VLAN to ID 40, rename it, and assign to new fabric
-DEFAULT_VLAN_ID=$(maas admin fabrics read | jq -r '.[0].vlans[0].id')
-maas admin vlan update "$FABRIC_ID" "$DEFAULT_VLAN_ID" name="home-lab" vid=40 space="" mtu=1500
+# Update default VLAN (ID 5001) in fabric 1 to ID 40, rename it
+maas admin vlan update 1 5001 name="home-lab" vid=40 mtu=1500
 
 echo "✅ MAAS setup complete. Fabric 'k8s-fabric' created. Default VLAN updated to ID 40 and renamed to 'home-lab'. Ready for manual DHCP configuration."

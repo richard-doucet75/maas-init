@@ -117,26 +117,26 @@ sudo nginx -t && sudo systemctl restart nginx
 echo "==============================="
 echo "👤 Creating MAAS admin user"
 echo "==============================="
-
-maas createadmin --username admin --password "$MAAS_PASSWORD" --email admin@maas.com
+sudo maas createadmin --username admin --password "$MAAS_PASSWORD" --email admin@maas.com
 
 echo "==============================="
 echo "🔑 Logging into MAAS as CLI profile 'admin'"
 echo "==============================="
 
-# Get API key as current user (not via sudo)
-API_KEY=$(maas apikey --username admin 2>/dev/null)
+# Get API key using sudo (admin was created under root context)
+API_KEY=$(sudo maas apikey --username admin 2>/dev/null)
 
 if [[ -z "$API_KEY" ]]; then
-  echo "❌ Failed to retrieve API key for MAAS admin user. Are you logged in?"
+  echo "❌ Failed to retrieve API key for MAAS admin user from sudo context."
   exit 1
 fi
 
-echo "Retrieved MAAS API key for local user."
+echo "Retrieved MAAS API key from root context."
 
-# Log in to MAAS CLI as current user
+# Log in to MAAS CLI as your current user
 maas logout admin 2>/dev/null || true
 maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY" --quiet
+
 
 echo "==============================="
 echo "🌐 Enabling DHCP on subnet"

@@ -204,7 +204,7 @@ if [[ -z "$SUBNET_ID" ]]; then
     echo "✅ Found existing VLAN $VLAN_ID on fabric $FABRIC_ID"
   fi
 
-  # Create the subnet
+  # 🔥 Create the subnet regardless of VLAN check
   SUBNET_CREATE_JSON=$(maas admin subnet create \
     cidr="$BASE_CIDR" \
     gateway_ip="$DEFAULT_GATEWAY" \

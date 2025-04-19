@@ -89,58 +89,6 @@ for i in {1..30}; do
 done
 
 echo "==============================="
-echo "🌐 Configuring NGINX reverse proxy"
-echo "==============================="
-
-sudo tee /etc/nginx/sites-available/maas >/dev/null <<EOF
-server {
-    listen 80;
-    server_name maas.jaded;
-
-    location / {
-        proxy_pass http://localhost:5240/;
-        proxy_http_version 1.1;
-
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-}
-EOF
-
-sudo ln -sf /etc/nginx/sites-available/maas /etc/nginx/sites-enabled/maas
-sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t && sudo systemctl restart nginx
-
-echo "==============================="
-echo "👤 Creating MAAS admin user"
-echo "==============================="
-sudo maas createadmin --username admin --password "$MAAS_PASSWORD" --email admin@maas.com
-
-echo "==============================="
-echo "🔑 Logging into MAAS as CLI profile 'admin'"
-echo "==============================="
-
-# Get API key using sudo (admin was created under root context)
-API_KEY=$(sudo maas apikey --username admin 2>/dev/null)
-
-if [[ -z "$API_KEY" ]]; then
-  echo "❌ Failed to retrieve API key for MAAS admin user from sudo context."
-  exit 1
-fi
-
-echo "Retrieved MAAS API key from root context."
-
-# Always remove the profile to avoid any prompts
-maas logout admin 2>/dev/null || true
-rm -f ~/.maas.cli || true  # Older versions may cache prompts here
-
-# Login cleanly with the API key
-maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY"
-
-echo "==============================="
 echo "🌐 Enabling DHCP on subnet"
 echo "==============================="
 
@@ -161,7 +109,6 @@ fi
 BASE_CIDR=$(echo "$MAAS_IP" | awk -F. '{printf "%s.%s.%s.0/24", $1, $2, $3}')
 echo "→ Will create subnet: $BASE_CIDR"
 
-# Lookup existing subnets
 SUBNET_ID=$(maas admin subnets read | jq -r --arg CIDR "$BASE_CIDR" '.[] | select(.cidr == $CIDR) | .id')
 
 if [[ -z "$SUBNET_ID" ]]; then
@@ -179,76 +126,74 @@ if [[ -z "$SUBNET_ID" ]]; then
   VLAN_JSON=$(echo "$VLAN_INFO" | jq -r --arg vid "$VLAN_ID" '.[] | select(.vid == ($vid | tonumber))')
   VLAN_ID_INTERNAL=$(echo "$VLAN_JSON" | jq -r .id)
 
-  if [[ -z "$VLAN_ID_INTERNAL" ]]; then
+  if [[ -z "$VLAN_ID_INTERNAL" || "$VLAN_ID_INTERNAL" == "null" ]]; then
     echo "⚠️ VLAN ID $VLAN_ID not found on fabric $FABRIC_ID. Creating it..."
     VLAN_CREATE=$(maas admin vlans create "$FABRIC_ID" name="untagged-$VLAN_ID" vid="$VLAN_ID" mtu=1500)
     VLAN_ID_INTERNAL=$(echo "$VLAN_CREATE" | jq -r '.id')
     echo "✅ Created VLAN $VLAN_ID with internal ID $VLAN_ID_INTERNAL"
   fi
 
-  # Create the subnet via API (CLI has no create command)
+  echo "🌐 Using MAAS API to create subnet $BASE_CIDR"
+  # Retry getting API key
   MAX_RETRIES=3
-RETRY_DELAY=2
-ATTEMPT=1
-API_KEY=""
+  RETRY_DELAY=2
+  ATTEMPT=1
+  API_KEY=""
 
-while [[ $ATTEMPT -le $MAX_RETRIES ]]; do
-  echo "🔐 Attempt $ATTEMPT to retrieve MAAS API key..."
-  API_KEY=$(sudo maas apikey --username admin 2>/dev/null)
+  while [[ $ATTEMPT -le $MAX_RETRIES ]]; do
+    echo "🔐 Attempt $ATTEMPT to retrieve MAAS API key..."
+    API_KEY=$(sudo maas apikey --username admin 2>/dev/null)
 
-  if [[ -n "$API_KEY" ]]; then
-    echo "✅ Retrieved MAAS API key."
-    break
+    if [[ -n "$API_KEY" ]]; then
+      echo "✅ Retrieved MAAS API key."
+      break
+    fi
+
+    echo "❌ Failed to retrieve API key. Retrying in $RETRY_DELAY seconds..."
+    sleep "$RETRY_DELAY"
+    ATTEMPT=$((ATTEMPT + 1))
+    RETRY_DELAY=$((RETRY_DELAY * 2))
+  done
+
+  if [[ -z "$API_KEY" ]]; then
+    echo "🚨 Could not retrieve MAAS API key after $MAX_RETRIES attempts. Exiting."
+    exit 1
   fi
 
-  echo "❌ Failed to retrieve API key. Retrying in $RETRY_DELAY seconds..."
-  sleep "$RETRY_DELAY"
-  ATTEMPT=$((ATTEMPT + 1))
-  RETRY_DELAY=$((RETRY_DELAY * 2))
-done
+  MAAS_URL="http://localhost:5240/MAAS"
+  SUBNET_CREATE=$(curl -s -H "Authorization: OAuth $API_KEY" \
+    -H "Accept: application/json" \
+    -X POST "$MAAS_URL/api/2.0/subnets/" \
+    --data-urlencode "cidr=$BASE_CIDR" \
+    --data-urlencode "gateway_ip=$DEFAULT_GATEWAY" \
+    --data-urlencode "dns_servers=10.0.0.10 10.0.0.11" \
+    --data-urlencode "vlan=$VLAN_ID_INTERNAL")
 
-if [[ -z "$API_KEY" ]]; then
-  echo "🚨 Could not retrieve MAAS API key after $MAX_RETRIES attempts. Exiting."
-  exit 1
-fi
-
-MAAS_URL="http://localhost:5240/MAAS"
-
-  # Construct proper OAuth 1.0 header from the 3-part API key
-OAUTH_HEADER=$(echo "$API_KEY" | awk -F: '{printf "OAuth oauth_consumer_key=\"%s\", oauth_token=\"%s\", oauth_signature_method=\"PLAINTEXT\", oauth_signature=\"%s&\"", $1, $2, $3}')
-
-echo "🌐 Using MAAS API to create subnet $BASE_CIDR"
-
-SUBNET_CREATE=$(curl -s -H "Authorization: $OAUTH_HEADER" \
-  -H "Accept: application/json" \
-  -X POST "$MAAS_URL/api/2.0/subnets/" \
-  --data-urlencode "cidr=$BASE_CIDR" \
-  --data-urlencode "gateway_ip=$DEFAULT_GATEWAY" \
-  --data-urlencode "dns_servers=10.0.0.10 10.0.0.11" \
-  --data-urlencode "vlan=$VLAN_ID_INTERNAL")
-
-echo "🔍 Raw MAAS API response:"
-echo "$SUBNET_CREATE"
-
-# Now safely parse
-SUBNET_ID=$(echo "$SUBNET_CREATE" | jq -r '.id')
-if [[ -z "$SUBNET_ID" || "$SUBNET_ID" == "null" ]]; then
-  echo "❌ Failed to create subnet via API:"
+  echo "🔍 Raw MAAS API response:"
   echo "$SUBNET_CREATE"
-  exit 1
+
+  SUBNET_ID=$(echo "$SUBNET_CREATE" | jq -r '.id')
+  if [[ -z "$SUBNET_ID" || "$SUBNET_ID" == "null" ]]; then
+    echo "❌ Failed to create subnet via API:"
+    echo "$SUBNET_CREATE"
+    exit 1
+  else
+    echo "✅ Subnet $BASE_CIDR created with ID $SUBNET_ID"
+  fi
 else
-  echo "✅ Subnet $BASE_CIDR created with ID $SUBNET_ID"
+  echo "✅ Found existing subnet $BASE_CIDR with ID $SUBNET_ID"
+  VLAN_ID_INTERNAL=$(maas admin subnet read "$SUBNET_ID" | jq -r '.vlan.id')
+  FABRIC_ID=$(maas admin subnet read "$SUBNET_ID" | jq -r '.vlan.fabric_id')
 fi
 
-
-# Reserve a dynamic range
+# Create dynamic IP range
 echo "🔧 Reserving DHCP range: 10.0.40.100 - 10.0.40.200"
 maas admin ipranges create type=dynamic start_ip=10.0.40.100 end_ip=10.0.40.200 subnet="$SUBNET_ID" comment="Reserved dynamic range for DHCP"
 
 # Enable DHCP on VLAN
 RACK_ID=$(maas admin rack-controllers read | jq -r '.[0].system_id')
 echo "🔧 Enabling DHCP on VLAN $VLAN_ID_INTERNAL with primary rack: $RACK_ID"
-maas admin vlan update "$FABRIC_ID" "$VLAN_ID" dhcp_on=true primary_rack="$RACK_ID"
+maas admin vlan update "$FABRIC_ID" "$VLAN_ID_INTERNAL" dhcp_on=true primary_rack="$RACK_ID"
 
 echo "==============================="
 echo "✅ DHCP is now active on subnet: $BASE_CIDR"

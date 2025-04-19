@@ -169,7 +169,7 @@ if [[ -z "$SUBNET_ID" ]]; then
   if [[ -z "$FABRIC_ID" || "$FABRIC_ID" == "null" ]]; then
     echo "⚠️ No existing fabric found. Creating 'bootstrap-fabric'..."
     FABRIC_CREATE=$(maas admin fabrics create name=bootstrap-fabric)
-    sleep 3
+    sleep 2
     FABRIC_ID=$(echo "$FABRIC_CREATE" | jq -r '.id')
     echo "✅ Created new fabric 'bootstrap-fabric' with ID $FABRIC_ID"
   fi
@@ -182,6 +182,8 @@ if [[ -z "$SUBNET_ID" ]]; then
     VLAN_CREATE_JSON=$(maas admin vlans create fabric=$FABRIC_ID vid=$VLAN_ID name="untagged-$VLAN_ID" mtu=1500 dhcp_on=false)
     VLAN_ID_INTERNAL=$(echo "$VLAN_CREATE_JSON" | jq -r '.id')
     echo "✅ VLAN $VLAN_ID created on fabric $FABRIC_ID (ID: $VLAN_ID_INTERNAL)"
+  else
+    echo "✅ Found existing VLAN $VLAN_ID on fabric $FABRIC_ID"
   fi
 
   SUBNET_CREATE_JSON=$(maas admin subnet create \
@@ -201,10 +203,13 @@ fi
 RACK_ID=$(maas admin rack-controllers read | jq -r '.[0].system_id')
 echo "✅ Found rack controller: $RACK_ID"
 
-echo "🔧 Configuring DHCP on VLAN $VLAN_ID (Fabric ID: $FABRIC_ID)..."
+# Enable DHCP on VLAN with rack controller
+echo "🔧 Enabling DHCP on VLAN $VLAN_ID (Fabric ID: $FABRIC_ID)..."
 maas admin vlan update "$FABRIC_ID" "$VLAN_ID" dhcp_on=true primary_rack="$RACK_ID"
 
-maas admin subnet update "$SUBNET_ID" \
+# Assign subnet to a valid space (defaulting to first one found)
+SPACE_NAME=$(maas admin spaces read | jq -r '.[0].name')
+maas admin subnet update "$SUBNET_ID" space="$SPACE_NAME" \
     gateway_ip="$DEFAULT_GATEWAY" \
     dns_servers="10.0.0.10 10.0.0.11" \
     allow_proxy=true \
@@ -214,6 +219,7 @@ maas admin subnet update "$SUBNET_ID" \
 
 echo "==============================="
 echo "✅ DHCP configuration completed!"
+echo "    MAAS is available at: $MAAS_URL"
 echo "==============================="
 
 

@@ -112,10 +112,18 @@ if ! maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY" >/dev/nul
 fi
 
 # Verify login works
+echo "🔐 Verifying MAAS login and API access..."
 if ! maas admin users read >/dev/null 2>&1; then
-  echo "❌ MAAS CLI login appears invalid even after successful login."
+  echo "❌ MAAS CLI login appears invalid."
+  echo "🔎 Output from 'maas list':"
+  maas list
+  echo "🔧 Try manually logging in with:"
+  echo "    maas login admin http://localhost:5240/MAAS/api/2.0/ <API_KEY>"
   exit 1
+else
+  echo "✅ MAAS CLI authentication confirmed."
 fi
+
 
 # Determine default gateway and CIDR
 DEFAULT_GATEWAY=$(ip route | grep default | awk '{print $3}')

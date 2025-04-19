@@ -106,6 +106,6 @@ maas admin ipranges create type=dynamic start_ip=10.0.40.100 end_ip=10.0.40.200 
 
 # Enable DHCP on VLAN $VLAN_NUMBER
 RACK_ID=$(maas admin rack-controllers read | jq -r '.[0].system_id')
-maas admin vlan update "$FABRIC_ID" "$VLAN_NUMBER" dhcp_on=true primary_rack="$RACK_ID"
+maas admin vlan update "$FABRIC_ID" "$VLAN_ID" dhcp_on=true primary_rack="$RACK_ID"
 
 echo "✅ DHCP enabled on VLAN $VLAN_NUMBER (Fabric ID $FABRIC_ID)"

@@ -145,8 +145,9 @@ echo "🌐 Enabling DHCP on subnet"
 echo "==============================="
 
 echo "🔐 Verifying MAAS login and API access..."
-if ! maas admin whoami >/dev/null 2>&1; then
-  echo "❌ MAAS CLI not authenticated. Please check your login and API key."
+# Try to run a simple query that only works if logged in
+if ! maas admin users read >/dev/null 2>&1; then
+  echo "❌ MAAS CLI login appears invalid. Could not read users."
   exit 1
 fi
 

@@ -91,8 +91,10 @@ VLAN_ID=$(maas admin vlans create "$FABRIC_ID" name="home-lab" vid=40 mtu=1500 |
 
 # Delete VLAN 0 (untagged) if it exists on the same fabric
 DEFAULT_VLAN_ID=$(maas admin vlans read "$FABRIC_ID" | jq -r '.[] | select(.vid == 0) | .id')
+
 if [[ -n "$DEFAULT_VLAN_ID" ]]; then
   maas admin vlan delete "$FABRIC_ID" "$DEFAULT_VLAN_ID"
+  echo "✅ VLAN 0 deleted."
 fi
 
-echo "✅ MAAS setup complete. Fabric 'k8s-fabric' created. VLAN 'home-lab' (VID 40) created. Default untagged VLAN removed."
+echo "✅ MAAS setup complete. Fabric 'k8s-fabric' created. VLAN 'home-lab' (VID 40) created. VLAN 0 deleted if it existed."

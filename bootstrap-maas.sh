@@ -189,27 +189,31 @@ if [[ -z "$SUBNET_ID" ]]; then
   fi
 
   # Check if VLAN exists or create it
-  VLAN_EXISTS=$(maas admin vlan read "$FABRIC_ID" "$VLAN_ID" 2>/dev/null || echo "")
-  if [[ -z "$VLAN_EXISTS" ]]; then
+  VLAN_INFO=$(maas admin vlans read "$FABRIC_ID")
+  VLAN_JSON=$(echo "$VLAN_INFO" | jq -r --arg vid "$VLAN_ID" '.[] | select(.vid == ($vid | tonumber))')
+  VLAN_ID_INTERNAL=$(echo "$VLAN_JSON" | jq -r '.id')
+
+  if [[ -z "$VLAN_ID_INTERNAL" || "$VLAN_ID_INTERNAL" == "null" ]]; then
     echo "⚠️ VLAN ID $VLAN_ID not found on fabric $FABRIC_ID. Creating it..."
     VLAN_CREATE_JSON=$(maas admin vlan create fabric=$FABRIC_ID vid=$VLAN_ID name="untagged-$VLAN_ID" mtu=1500 dhcp_on=false primary_rack="" 2>&1)
     if echo "$VLAN_CREATE_JSON" | jq -e .id >/dev/null 2>&1; then
-      echo "✅ VLAN $VLAN_ID created on fabric $FABRIC_ID"
+      VLAN_ID_INTERNAL=$(echo "$VLAN_CREATE_JSON" | jq -r '.id')
+      echo "✅ VLAN $VLAN_ID created on fabric $FABRIC_ID (ID: $VLAN_ID_INTERNAL)"
     else
       echo "❌ Failed to create VLAN $VLAN_ID. MAAS response:"
       echo "$VLAN_CREATE_JSON"
       exit 1
     fi
   else
-    echo "✅ Found existing VLAN $VLAN_ID on fabric $FABRIC_ID"
+    echo "✅ Found existing VLAN $VLAN_ID on fabric $FABRIC_ID (ID: $VLAN_ID_INTERNAL)"
   fi
 
-  # 🔥 Create the subnet regardless of VLAN check
+  # 🔥 Create the subnet with the correct internal VLAN ID
   SUBNET_CREATE_JSON=$(maas admin subnet create \
     cidr="$BASE_CIDR" \
     gateway_ip="$DEFAULT_GATEWAY" \
     dns_servers="10.0.0.10 10.0.0.11" \
-    vlan="$VLAN_ID" 2>&1)
+    vlan="$VLAN_ID_INTERNAL" 2>&1)
 
   if echo "$SUBNET_CREATE_JSON" | jq -e .id >/dev/null 2>&1; then
     SUBNET_ID=$(echo "$SUBNET_CREATE_JSON" | jq -r '.id')
@@ -222,6 +226,7 @@ if [[ -z "$SUBNET_ID" ]]; then
 else
   echo "✅ Found existing subnet for $MAAS_IP (ID: $SUBNET_ID)"
   FABRIC_ID=$(maas admin subnet read "$SUBNET_ID" | jq -r '.vlan.fabric_id')
+  VLAN_ID_INTERNAL=$(maas admin subnet read "$SUBNET_ID" | jq -r '.vlan.id')
 fi
 
 echo "🔧 Configuring DHCP on VLAN $VLAN_ID (Fabric ID: $FABRIC_ID)..."
@@ -239,7 +244,7 @@ echo "✅ Found rack controller: $RACK_ID"
 # Enable DHCP on the VLAN and assign the rack controller
 maas admin vlan update "$FABRIC_ID" "$VLAN_ID" dhcp_on=true primary_rack="$RACK_ID"
 
-# Update subnet configuration with correct gateway and hardcoded next_server
+# Update subnet configuration
 maas admin subnet update "$SUBNET_ID" \
     gateway_ip="$DEFAULT_GATEWAY" \
     dns_servers="10.0.0.10 10.0.0.11" \
@@ -253,3 +258,4 @@ echo "==============================="
 echo "✅ MAAS has been successfully set up!"
 echo "    Access it at: $MAAS_URL"
 echo "==============================="
+

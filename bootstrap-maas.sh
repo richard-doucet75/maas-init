@@ -95,4 +95,4 @@ maas admin subnets create \
   cidr=10.0.40.0/24 \
   gateway_ip=10.0.40.1 \
   dns_servers="10.0.0.10 10.0.0.11" \
-  vlan=$VLAN_ID
+  vlan=40

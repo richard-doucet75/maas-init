@@ -104,4 +104,8 @@ maas admin ipranges create type=reserved start_ip=10.0.40.1 end_ip=10.0.40.30 su
 # Create dynamic IP range for DHCP
 maas admin ipranges create type=dynamic start_ip=10.0.40.100 end_ip=10.0.40.200 subnet=$SUBNET_ID comment="DHCP dynamic range"
 
-# Confirm DHCP is disabled (default state)
+# Enable DHCP on VLAN 40
+RACK_ID=$(maas admin rack-controllers read | jq -r '.[0].system_id')
+maas admin vlan update "$FABRIC_ID" "$VLAN_ID" dhcp_on=true primary_rack="$RACK_ID"
+
+echo "✅ DHCP enabled on VLAN 40 (Fabric ID $FABRIC_ID, VLAN ID $VLAN_ID)"

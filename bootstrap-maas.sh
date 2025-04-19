@@ -150,10 +150,6 @@ if ! maas admin users read >/dev/null 2>&1; then
   exit 1
 fi
 
-# Prompt for next_server (TFTP provider) with default to MAAS_IP
-read -p "Enter IP for 'next_server' (default: MAAS server IP $MAAS_IP): " NEXT_SERVER
-NEXT_SERVER=${NEXT_SERVER:-$MAAS_IP}
-
 # Detect gateway from default route
 DEFAULT_GATEWAY=$(ip route | grep default | awk '{print $3}')
 if [[ -z "$DEFAULT_GATEWAY" ]]; then
@@ -250,7 +246,7 @@ maas admin subnet update "$SUBNET_ID" \
     allow_proxy=true \
     active_discovery=true \
     boot_file="pxelinux.0" \
-    next_server="$NEXT_SERVER"
+    next_server="10.0.40.50"
    
 echo "==============================="
 echo "✅ MAAS has been successfully set up!"

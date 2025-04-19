@@ -179,7 +179,7 @@ if [[ -z "$SUBNET_ID" ]]; then
 
   if [[ -z "$VLAN_ID_INTERNAL" || "$VLAN_ID_INTERNAL" == "null" ]]; then
     echo "⚠️ VLAN ID $VLAN_ID not found on fabric $FABRIC_ID. Creating it..."
-    VLAN_CREATE_JSON=$(maas admin vlan create fabric=$FABRIC_ID vid=$VLAN_ID name="untagged-$VLAN_ID" mtu=1500 dhcp_on=false)
+    VLAN_CREATE_JSON=$(maas admin vlans create fabric=$FABRIC_ID vid=$VLAN_ID name="untagged-$VLAN_ID" mtu=1500 dhcp_on=false)
     VLAN_ID_INTERNAL=$(echo "$VLAN_CREATE_JSON" | jq -r '.id')
     echo "✅ VLAN $VLAN_ID created on fabric $FABRIC_ID (ID: $VLAN_ID_INTERNAL)"
   fi

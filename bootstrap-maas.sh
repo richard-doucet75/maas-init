@@ -63,6 +63,14 @@ done
 
 echo "✅ MAAS API is ready."
 
+# Wait for full region controller API (e.g. subnets)
+until curl -s -f http://localhost:5240/MAAS/api/2.0/ | jq '."subnets"' >/dev/null; do
+    echo "Waiting for full MAAS API surface (e.g. subnets)..."
+    sleep 2
+done
+
+echo "✅ Full MAAS API is available."
+
 # Create admin
 sudo maas createadmin --username admin --password "$MAAS_PASSWORD" --email admin@maas.com
 API_KEY=$(sudo maas apikey --username admin)
@@ -99,7 +107,18 @@ if [[ -z "$SUBNET_ID" ]]; then
         --data-urlencode "dns_servers=10.0.0.10 10.0.0.11" \
         --data-urlencode "vlan=$VLAN_ID_INTERNAL")
 
+    if echo "$SUBNET_CREATE" | grep -q "Forbidden"; then
+        echo "❌ MAAS API call to create subnet was forbidden. Check authentication and permissions."
+        echo "$SUBNET_CREATE"
+        exit 1
+    fi
+
     SUBNET_ID=$(echo "$SUBNET_CREATE" | jq -r '.id')
+    if [[ -z "$SUBNET_ID" || "$SUBNET_ID" == "null" ]]; then
+        echo "❌ Failed to create subnet via API:"
+        echo "$SUBNET_CREATE"
+        exit 1
+    fi
 fi
 
 # Set DHCP range and enable DHCP

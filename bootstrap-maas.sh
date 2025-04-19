@@ -195,18 +195,18 @@ if [[ -z "$SUBNET_ID" ]]; then
 
   if [[ -z "$VLAN_ID_INTERNAL" || "$VLAN_ID_INTERNAL" == "null" ]]; then
     echo "⚠️ VLAN ID $VLAN_ID not found on fabric $FABRIC_ID. Creating it..."
-    VLAN_CREATE_JSON=$(maas admin vlan create fabric=$FABRIC_ID vid=$VLAN_ID name="untagged-$VLAN_ID" mtu=1500 dhcp_on=false primary_rack="" 2>&1)
+    VLAN_CREATE_JSON=$(maas admin vlans create fabric=$FABRIC_ID vid=$VLAN_ID name="untagged-$VLAN_ID" mtu=1500 dhcp_on=false primary_rack="" 2>&1)
     
-    # Always show MAAS response
+    echo "📦 MAAS response for VLAN creation:"
     echo "$VLAN_CREATE_JSON"
 
-    if echo "$VLAN_CREATE_JSON" | jq -e .id >/dev/null 2>&1; then
-      VLAN_ID_INTERNAL=$(echo "$VLAN_CREATE_JSON" | jq -r '.id')
-      echo "✅ VLAN $VLAN_ID created on fabric $FABRIC_ID (ID: $VLAN_ID_INTERNAL)"
-    else
+    VLAN_ID_INTERNAL=$(echo "$VLAN_CREATE_JSON" | jq -r '.id' 2>/dev/null)
+    if [[ -z "$VLAN_ID_INTERNAL" || "$VLAN_ID_INTERNAL" == "null" ]]; then
       echo "❌ Failed to create VLAN $VLAN_ID. See MAAS response above."
       exit 1
     fi
+
+    echo "✅ VLAN $VLAN_ID created on fabric $FABRIC_ID (ID: $VLAN_ID_INTERNAL)"
   else
     echo "✅ Found existing VLAN $VLAN_ID on fabric $FABRIC_ID (ID: $VLAN_ID_INTERNAL)"
   fi

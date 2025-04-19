@@ -83,4 +83,7 @@ maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY"
 # Verify login
 maas admin users read >/dev/null
 
-echo "✅ MAAS setup complete. Ready for manual DHCP configuration."
+# Create fabric
+maas admin fabrics create name="k8s-fabric"
+
+echo "✅ MAAS setup complete. Fabric 'k8s-fabric' created. Ready for manual DHCP configuration."

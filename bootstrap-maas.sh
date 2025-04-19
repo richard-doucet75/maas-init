@@ -150,15 +150,15 @@ if ! maas admin users read >/dev/null 2>&1; then
   exit 1
 fi
 
-# Detect gateway from default route
+# Detect gateway from routing table
 DEFAULT_GATEWAY=$(ip route | grep default | awk '{print $3}')
 if [[ -z "$DEFAULT_GATEWAY" ]]; then
-  echo "❌ Could not determine default gateway. Please specify manually."
+  echo "❌ Could not determine default gateway. Please set manually."
   exit 1
 fi
 echo "✅ Detected default gateway: $DEFAULT_GATEWAY"
 
-# Attempt to find an existing subnet that matches the MAAS IP
+# Try to find existing subnet
 SUBNET_ID=$(maas admin subnets read 2>/dev/null | jq -r --arg MAAS_IP "$MAAS_IP" '
   .[] | select(.cidr != null and ($MAAS_IP | startswith(.cidr | split("/")[0]))) | .id' | head -n1)
 
@@ -168,83 +168,77 @@ if [[ -z "$SUBNET_ID" ]]; then
   BASE_CIDR=$(echo "$MAAS_IP" | awk -F. '{printf "%s.%s.%s.0/24", $1, $2, $3}')
   echo "→ Will create subnet: $BASE_CIDR"
 
-  # Try to get fabric ID or create one
-  FABRIC_JSON=$(maas admin fabrics read 2>/dev/null)
+  # Try to get fabric ID
+  FABRIC_JSON=$(maas admin fabrics read)
   FABRIC_ID=$(echo "$FABRIC_JSON" | jq -r '.[0].id')
 
   if [[ -z "$FABRIC_ID" || "$FABRIC_ID" == "null" ]]; then
     echo "⚠️ No existing fabric found. Creating 'bootstrap-fabric'..."
-    FABRIC_CREATE=$(maas admin fabrics create name="bootstrap-fabric" 2>/dev/null)
-    FABRIC_ID=$(echo "$FABRIC_CREATE" | jq -r '.id')
+    FABRIC_CREATE=$(maas admin fabrics create name=bootstrap-fabric)
+    echo "⏳ Waiting briefly to let MAAS register the new fabric..."
+    sleep 3
 
+    # Re-fetch fabric ID by name
+    FABRIC_ID=$(maas admin fabrics read | jq -r '.[] | select(.name == "bootstrap-fabric") | .id')
     if [[ -z "$FABRIC_ID" || "$FABRIC_ID" == "null" ]]; then
-      echo "❌ Failed to create fallback fabric. MAAS response:"
-      echo "$FABRIC_CREATE"
+      echo "❌ Fabric creation failed or not visible after wait."
       exit 1
     fi
-
     echo "✅ Created new fabric 'bootstrap-fabric' with ID $FABRIC_ID"
   else
     echo "✅ Using existing fabric with ID $FABRIC_ID"
   fi
 
-  # Check if VLAN exists or create it
-  VLAN_INFO=$(maas admin vlans read "$FABRIC_ID")
-  VLAN_JSON=$(echo "$VLAN_INFO" | jq -r --arg vid "$VLAN_ID" '.[] | select(.vid == ($vid | tonumber))')
+  # Check or create VLAN
+  VLAN_JSON=$(maas admin vlans read "$FABRIC_ID" | jq -r --arg vid "$VLAN_ID" '.[] | select(.vid == ($vid | tonumber))')
   VLAN_ID_INTERNAL=$(echo "$VLAN_JSON" | jq -r '.id')
 
   if [[ -z "$VLAN_ID_INTERNAL" || "$VLAN_ID_INTERNAL" == "null" ]]; then
     echo "⚠️ VLAN ID $VLAN_ID not found on fabric $FABRIC_ID. Creating it..."
-    VLAN_CREATE_JSON=$(maas admin vlans create fabric=$FABRIC_ID vid=$VLAN_ID name="untagged-$VLAN_ID" mtu=1500 dhcp_on=false primary_rack="" 2>&1)
-    
-    echo "📦 MAAS response for VLAN creation:"
-    echo "$VLAN_CREATE_JSON"
+    VLAN_CREATE_JSON=$(maas admin vlans create fabric=$FABRIC_ID vid=$VLAN_ID name="untagged-$VLAN_ID" mtu=1500 dhcp_on=false primary_rack="")
+    VLAN_ID_INTERNAL=$(echo "$VLAN_CREATE_JSON" | jq -r '.id')
 
-    VLAN_ID_INTERNAL=$(echo "$VLAN_CREATE_JSON" | jq -r '.id' 2>/dev/null)
     if [[ -z "$VLAN_ID_INTERNAL" || "$VLAN_ID_INTERNAL" == "null" ]]; then
-      echo "❌ Failed to create VLAN $VLAN_ID. See MAAS response above."
+      echo "❌ Failed to create VLAN $VLAN_ID. MAAS response:"
+      echo "$VLAN_CREATE_JSON"
       exit 1
     fi
-
     echo "✅ VLAN $VLAN_ID created on fabric $FABRIC_ID (ID: $VLAN_ID_INTERNAL)"
   else
     echo "✅ Found existing VLAN $VLAN_ID on fabric $FABRIC_ID (ID: $VLAN_ID_INTERNAL)"
   fi
 
-  # 🔥 Create the subnet with the correct internal VLAN ID
+  # Create the subnet
   SUBNET_CREATE_JSON=$(maas admin subnet create \
     cidr="$BASE_CIDR" \
     gateway_ip="$DEFAULT_GATEWAY" \
     dns_servers="10.0.0.10 10.0.0.11" \
-    vlan="$VLAN_ID_INTERNAL" 2>&1)
-
-  if echo "$SUBNET_CREATE_JSON" | jq -e .id >/dev/null 2>&1; then
-    SUBNET_ID=$(echo "$SUBNET_CREATE_JSON" | jq -r '.id')
-    echo "✅ Subnet $BASE_CIDR registered with ID $SUBNET_ID"
-  else
+    vlan="$VLAN_ID_INTERNAL")
+  
+  SUBNET_ID=$(echo "$SUBNET_CREATE_JSON" | jq -r '.id')
+  if [[ -z "$SUBNET_ID" || "$SUBNET_ID" == "null" ]]; then
     echo "❌ Failed to create subnet $BASE_CIDR. MAAS response:"
     echo "$SUBNET_CREATE_JSON"
     exit 1
   fi
+  echo "✅ Subnet $BASE_CIDR registered with ID $SUBNET_ID"
 else
   echo "✅ Found existing subnet for $MAAS_IP (ID: $SUBNET_ID)"
   FABRIC_ID=$(maas admin subnet read "$SUBNET_ID" | jq -r '.vlan.fabric_id')
   VLAN_ID_INTERNAL=$(maas admin subnet read "$SUBNET_ID" | jq -r '.vlan.id')
 fi
 
-echo "🔧 Configuring DHCP on VLAN $VLAN_ID (Fabric ID: $FABRIC_ID)..."
-
-# Get rack controller system ID
+# Get rack controller ID
 RACK_ID=$(maas admin rack-controllers read | jq -r '.[0].system_id')
-
 if [[ -z "$RACK_ID" ]]; then
-  echo "❌ No rack controller found. Cannot enable DHCP."
+  echo "❌ No rack controller detected. Cannot enable DHCP."
   exit 1
 fi
-
 echo "✅ Found rack controller: $RACK_ID"
 
-# Enable DHCP on the VLAN and assign the rack controller
+echo "🔧 Configuring DHCP on VLAN $VLAN_ID (Fabric ID: $FABRIC_ID)..."
+
+# Enable DHCP on the VLAN
 maas admin vlan update "$FABRIC_ID" "$VLAN_ID" dhcp_on=true primary_rack="$RACK_ID"
 
 # Update subnet configuration

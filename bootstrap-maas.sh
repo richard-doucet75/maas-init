@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -xe
+set -e
 
 # Prompt for user input
 read -s -p "Enter PostgreSQL password: " PG_PASSWORD
@@ -118,7 +118,7 @@ echo "==============================="
 echo "👤 Creating MAAS admin user"
 echo "==============================="
 
-sudo maas createadmin --username admin --password "$MAAS_PASSWORD" --email admin@maas.com
+maas createadmin --username admin --password "$MAAS_PASSWORD" --email admin@maas.com
 
 echo "==============================="
 echo "🔑 Logging into MAAS as CLI profile 'admin'"

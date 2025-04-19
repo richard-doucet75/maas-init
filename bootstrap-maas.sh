@@ -16,8 +16,8 @@ if [[ -z "$MAAS_IP" ]]; then
     echo "Detected IP address: $MAAS_IP"
 fi
 
-read -p "Enter VLAN ID to enable DHCP on (default: 0): " VLAN_ID
-VLAN_ID=${VLAN_ID:-0}
+read -p "Enter VLAN number to enable DHCP on (default: 0): " VLAN_NUMBER
+VLAN_NUMBER=${VLAN_NUMBER:-0}
 
 # Clean previous installs
 sudo snap remove --purge maas || true
@@ -87,10 +87,10 @@ maas admin users read >/dev/null
 FABRIC_ID=$(maas admin fabrics create name="k8s-fabric" | jq -r '.id')
 
 # Create VLAN 40 on the new fabric (overwrite existing if needed)
-maas admin vlan update "$FABRIC_ID" 0 name="vlan40" mtu=1500 vid=40
+maas admin vlan update "$FABRIC_ID" 0 name="vlan$VLAN_NUMBER" mtu=1500 vid=$VLAN_NUMBER
 
 # Create subnet 10.0.40.0/24 on VLAN 40
-VLAN_ID=$(maas admin vlans read "$FABRIC_ID" | jq -r '.[] | select(.vid == 40) | .id')
+VLAN_ID=$(maas admin vlans read "$FABRIC_ID" | jq -r --arg vid "$VLAN_NUMBER" '.[] | select(.vid == ($vid | tonumber)) | .id')
 maas admin subnets create \
   cidr=10.0.40.0/24 \
   gateway_ip=10.0.40.1 \
@@ -104,8 +104,8 @@ maas admin ipranges create type=reserved start_ip=10.0.40.1 end_ip=10.0.40.30 su
 # Create dynamic IP range for DHCP
 maas admin ipranges create type=dynamic start_ip=10.0.40.100 end_ip=10.0.40.200 subnet=$SUBNET_ID comment="DHCP dynamic range"
 
-# Enable DHCP on VLAN 40
+# Enable DHCP on VLAN $VLAN_NUMBER
 RACK_ID=$(maas admin rack-controllers read | jq -r '.[0].system_id')
-maas admin vlan update "$FABRIC_ID" "$VLAN_ID" dhcp_on=true primary_rack="$RACK_ID"
+maas admin vlan update "$FABRIC_ID" "$VLAN_NUMBER" dhcp_on=true primary_rack="$RACK_ID"
 
-echo "✅ DHCP enabled on VLAN 40 (Fabric ID $FABRIC_ID, VLAN ID $VLAN_ID)"
+echo "✅ DHCP enabled on VLAN $VLAN_NUMBER (Fabric ID $FABRIC_ID)"

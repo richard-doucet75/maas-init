@@ -47,13 +47,21 @@ sudo maas init region+rack \
   --database-uri "postgres://maas:$PG_PASSWORD@localhost/maasdb" \
   --maas-url "$MAAS_URL"
 
-# Wait for MAAS to start
+# Wait for MAAS to start listening
 until sudo ss -tulnp | grep -q ':5240'; do
     echo "Waiting for MAAS to start..."
     sleep 2
 done
 
 echo "MAAS is now listening on port 5240"
+
+# Wait for MAAS API to become available
+until curl -s -f http://localhost:5240/MAAS/api/2.0/version/ >/dev/null; do
+    echo "Waiting for MAAS API to become available..."
+    sleep 2
+done
+
+echo "✅ MAAS API is ready."
 
 # Create admin
 sudo maas createadmin --username admin --password "$MAAS_PASSWORD" --email admin@maas.com

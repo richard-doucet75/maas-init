@@ -69,16 +69,16 @@ ATTEMPT=1
 RETRY_DELAY=2
 API_KEY=""
 
-while [[ \$ATTEMPT -le \$MAX_RETRIES ]]; do
+while [[ $ATTEMPT -le $MAX_RETRIES ]]; do
   API_KEY=$(sudo maas apikey --username admin 2>/dev/null)
   if [[ -n "$API_KEY" ]]; then
     echo "✅ Retrieved API key for user 'admin'."
     break
   fi
-  echo "❌ Failed to retrieve API key (attempt \$ATTEMPT). Retrying in \$RETRY_DELAY seconds..."
-  sleep \$RETRY_DELAY
-  ATTEMPT=\$((ATTEMPT + 1))
-  RETRY_DELAY=\$((RETRY_DELAY * 2))
+  echo "❌ Failed to retrieve API key (attempt $ATTEMPT). Retrying in $RETRY_DELAY seconds..."
+  sleep $RETRY_DELAY
+  ATTEMPT=$((ATTEMPT + 1))
+  RETRY_DELAY=$((RETRY_DELAY * 2))
 done
 
 if [[ -z "$API_KEY" ]]; then

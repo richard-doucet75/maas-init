@@ -84,6 +84,9 @@ maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY"
 maas admin users read >/dev/null
 
 # Create fabric
-maas admin fabrics create name="k8s-fabric"
+FABRIC_ID=$(maas admin fabrics create name="k8s-fabric" | jq -r '.id')
 
-echo "✅ MAAS setup complete. Fabric 'k8s-fabric' created. Ready for manual DHCP configuration."
+# Create VLAN
+maas admin vlans create "$FABRIC_ID" name="home-lab" vid=40 space="" mtu=1500
+
+echo "✅ MAAS setup complete. Fabric 'k8s-fabric' and VLAN 'home-lab' created. Ready for manual DHCP configuration."

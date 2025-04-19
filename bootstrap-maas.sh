@@ -145,7 +145,6 @@ echo "🌐 Enabling DHCP on subnet"
 echo "==============================="
 
 echo "🔐 Verifying MAAS login and API access..."
-# Try to run a simple query that only works if logged in
 if ! maas admin users read >/dev/null 2>&1; then
   echo "❌ MAAS CLI login appears invalid. Could not read users."
   exit 1
@@ -161,7 +160,7 @@ if [[ -z "$SUBNET_ID" ]]; then
   BASE_CIDR=$(echo "$MAAS_IP" | awk -F. '{printf "%s.%s.%s.0/24", $1, $2, $3}')
   echo "→ Will create subnet: $BASE_CIDR"
 
-  # Try to get fabric ID or create one if needed
+  # Try to get fabric ID or create one
   FABRIC_JSON=$(maas admin fabrics read 2>/dev/null)
   FABRIC_ID=$(echo "$FABRIC_JSON" | jq -r '.[0].id')
 
@@ -219,8 +218,18 @@ fi
 
 echo "🔧 Configuring DHCP on VLAN $VLAN_ID (Fabric ID: $FABRIC_ID)..."
 
-# Enable DHCP on the VLAN
-maas admin vlan update "$FABRIC_ID" "$VLAN_ID" dhcp_on=true
+# Get rack controller system ID
+RACK_ID=$(maas admin rack-controllers read | jq -r '.[0].system_id')
+
+if [[ -z "$RACK_ID" ]]; then
+  echo "❌ No rack controller found. Cannot enable DHCP."
+  exit 1
+fi
+
+echo "✅ Found rack controller: $RACK_ID"
+
+# Enable DHCP on the VLAN and assign the rack controller
+maas admin vlan update "$FABRIC_ID" "$VLAN_ID" dhcp_on=true primary_rack="$RACK_ID"
 
 # Update subnet configuration
 maas admin subnet update "$SUBNET_ID" \

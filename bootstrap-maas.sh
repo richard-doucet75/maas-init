@@ -104,22 +104,6 @@ if [[ -z "$SUBNET_ID" ]]; then
         VLAN_ID_INTERNAL=$(maas admin vlans create "$FABRIC_ID" name="untagged-$VLAN_ID" vid="$VLAN_ID" mtu=1500 | jq -r '.id')
     fi
 
-    # Wait for rack controller to register
-    RACK_ID=""
-    while true; do
-        RACK_ID=$(maas admin rack-controllers read | jq -r '.[0].system_id')
-        if [[ "$RACK_ID" != "null" && -n "$RACK_ID" ]]; then
-            break
-        fi
-        echo "Waiting for rack controller to register..."
-        sleep 2
-    done
-
-    INTERFACE_ID=$(maas admin interfaces read "$RACK_ID" | jq -r '.[0].id')
-    if [[ -n "$INTERFACE_ID" ]]; then
-        maas admin interface update "$RACK_ID" "$INTERFACE_ID" vlan="$VLAN_ID_INTERNAL"
-    fi
-
     SUBNET_CREATE=$(curl -s -H "Authorization: OAuth $API_KEY" \
         -H "Accept: application/json" \
         -X POST "http://localhost:5240/MAAS/api/2.0/subnets/" \

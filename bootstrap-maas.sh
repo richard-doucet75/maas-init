@@ -169,14 +169,22 @@ if [[ -z "$SUBNET_ID" ]]; then
     exit 1
   fi
 
-  FABRIC_ID=$(echo "$VLAN_INFO" | jq -r '.fabric_id')
-
-  if [[ -z "$FABRIC_ID" || "$FABRIC_ID" == "null" ]]; then
-    echo "❌ Found VLAN but it has no associated fabric_id. Something is off."
-    exit 1
+  # Look through all fabrics to find one with the specified VLAN ID
+FABRIC_ID=""
+for fid in $(maas admin fabrics read | jq -r '.[].id'); do
+  VLAN_MATCH=$(maas admin vlans read "$fid" | jq -r --arg vid "$VLAN_ID" '.[] | select(.vid == ($vid | tonumber)) | .fabric_id')
+  if [[ -n "$VLAN_MATCH" ]]; then
+    FABRIC_ID="$fid"
+    break
   fi
+done
 
-  echo "✅ Using fabric ID $FABRIC_ID from VLAN $VLAN_ID"
+if [[ -z "$FABRIC_ID" ]]; then
+  echo "❌ Could not find any VLAN with ID $VLAN_ID across any fabric. Exiting."
+  exit 1
+fi
+
+echo "✅ Using fabric ID $FABRIC_ID from VLAN $VLAN_ID"
 
   # Check if VLAN exists or create it
   VLAN_EXISTS=$(maas admin vlan read "$FABRIC_ID" "$VLAN_ID" 2>/dev/null || echo "")

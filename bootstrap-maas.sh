@@ -88,4 +88,3 @@ FABRIC_ID=$(maas admin fabrics create name="k8s-fabric" | jq -r '.id')
 
 # Create VLAN 40 on the new fabric (overwrite existing if needed)
 maas admin vlan update "$FABRIC_ID" 0 name="home-lab" mtu=1500 vid=40
-

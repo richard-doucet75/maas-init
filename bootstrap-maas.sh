@@ -87,7 +87,7 @@ maas admin users read >/dev/null
 FABRIC_ID=$(maas admin fabrics create name="k8s-fabric" | jq -r '.id')
 
 # Create VLAN 40 on the new fabric (overwrite existing if needed)
-maas admin vlan update "$FABRIC_ID" 0 name="home-lab" mtu=1500 vid=40
+maas admin vlan update "$FABRIC_ID" 0 name="vlan40" mtu=1500 vid=40
 
 # Create subnet 10.0.40.0/24 on VLAN 40
 VLAN_ID=$(maas admin vlans read "$FABRIC_ID" | jq -r '.[] | select(.vid == 40) | .id')
@@ -95,4 +95,4 @@ maas admin subnets create \
   cidr=10.0.40.0/24 \
   gateway_ip=10.0.40.1 \
   dns_servers="10.0.0.10 10.0.0.11" \
-  vlan=40
+  vlan=$VLAN_ID

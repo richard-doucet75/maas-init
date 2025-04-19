@@ -96,3 +96,12 @@ maas admin subnets create \
   gateway_ip=10.0.40.1 \
   dns_servers="10.0.0.10 10.0.0.11" \
   vlan=$VLAN_ID
+
+# Reserve IP range .1 - .30
+SUBNET_ID=$(maas admin subnets read | jq -r --arg cidr "10.0.40.0/24" '.[] | select(.cidr == $cidr) | .id')
+maas admin ipranges create type=reserved start_ip=10.0.40.1 end_ip=10.0.40.30 subnet=$SUBNET_ID comment="Reserved range for gateway and services"
+
+# Create dynamic IP range for DHCP
+maas admin ipranges create type=dynamic start_ip=10.0.40.100 end_ip=10.0.40.200 subnet=$SUBNET_ID comment="DHCP dynamic range"
+
+# Confirm DHCP is disabled (default state)

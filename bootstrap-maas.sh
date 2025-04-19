@@ -94,36 +94,45 @@ echo "==============================="
 
 echo "🔐 Verifying MAAS login and API access..."
 
-# Get API key from sudo context
-API_KEY=$(sudo maas apikey --username admin 2>/dev/null)
+# Attempt to fetch the API key with retries
+MAX_RETRIES=3
+ATTEMPT=1
+RETRY_DELAY=2
+API_KEY=""
+
+while [[ $ATTEMPT -le $MAX_RETRIES ]]; do
+  API_KEY=$(sudo maas apikey --username admin 2>/dev/null)
+
+  if [[ -n "$API_KEY" ]]; then
+    echo "✅ Retrieved API key for user 'admin'."
+    break
+  fi
+
+  echo "❌ Failed to retrieve API key (attempt $ATTEMPT). Retrying in $RETRY_DELAY seconds..."
+  sleep $RETRY_DELAY
+  ATTEMPT=$((ATTEMPT + 1))
+  RETRY_DELAY=$((RETRY_DELAY * 2))
+done
 
 if [[ -z "$API_KEY" ]]; then
-  echo "❌ Failed to retrieve MAAS API key as root."
+  echo "🚨 Could not retrieve MAAS API key after $MAX_RETRIES attempts. Exiting."
   exit 1
 fi
 
-# Clean previous CLI session and login fresh
+# Clean any previous CLI session
 maas logout admin 2>/dev/null || true
 rm -f ~/.maas.cli 2>/dev/null || true
 
-if ! maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY" >/dev/null 2>&1; then
-  echo "❌ MAAS login failed using API key."
-  exit 1
-fi
+# Login with the retrieved key
+maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY"
 
-# Verify login works
-echo "🔐 Verifying MAAS login and API access..."
+# Confirm login
 if ! maas admin users read >/dev/null 2>&1; then
-  echo "❌ MAAS CLI login appears invalid."
-  echo "🔎 Output from 'maas list':"
-  maas list
-  echo "🔧 Try manually logging in with:"
-  echo "    maas login admin http://localhost:5240/MAAS/api/2.0/ <API_KEY>"
+  echo "❌ MAAS CLI login failed after setting API key. Exiting."
   exit 1
 else
-  echo "✅ MAAS CLI authentication confirmed."
+  echo "✅ MAAS CLI login successful."
 fi
-
 
 # Determine default gateway and CIDR
 DEFAULT_GATEWAY=$(ip route | grep default | awk '{print $3}')

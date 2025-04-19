@@ -187,19 +187,47 @@ if [[ -z "$SUBNET_ID" ]]; then
   fi
 
   # Create the subnet via API (CLI has no create command)
-  API_KEY=$(sudo maas apikey --username admin)
-  MAAS_URL="http://localhost:5240/MAAS"
+  MAX_RETRIES=3
+RETRY_DELAY=2
+ATTEMPT=1
+API_KEY=""
+
+while [[ $ATTEMPT -le $MAX_RETRIES ]]; do
+  echo "🔐 Attempt $ATTEMPT to retrieve MAAS API key..."
+  API_KEY=$(sudo maas apikey --username admin 2>/dev/null)
+
+  if [[ -n "$API_KEY" ]]; then
+    echo "✅ Retrieved MAAS API key."
+    break
+  fi
+
+  echo "❌ Failed to retrieve API key. Retrying in $RETRY_DELAY seconds..."
+  sleep "$RETRY_DELAY"
+  ATTEMPT=$((ATTEMPT + 1))
+  RETRY_DELAY=$((RETRY_DELAY * 2))
+done
+
+if [[ -z "$API_KEY" ]]; then
+  echo "🚨 Could not retrieve MAAS API key after $MAX_RETRIES attempts. Exiting."
+  exit 1
+fi
+
+MAAS_URL="http://localhost:5240/MAAS"
 
   echo "🌐 Using MAAS API to create subnet $BASE_CIDR"
-  SUBNET_CREATE=$(curl -s -H "Authorization: OAuth $API_KEY" \
-    -H "Accept: application/json" \
-    -X POST "$MAAS_URL/api/2.0/subnets/" \
-    -d "cidr=$BASE_CIDR" \
-    -d "gateway_ip=$DEFAULT_GATEWAY" \
-    -d "dns_servers=10.0.0.10 10.0.0.11" \
-    -d "vlan=$VLAN_ID_INTERNAL")
+SUBNET_CREATE=$(curl -s -H "Authorization: OAuth $API_KEY" \
+  -H "Accept: application/json" \
+  -X POST "$MAAS_URL/api/2.0/subnets/" \
+  --data-urlencode "cidr=$BASE_CIDR" \
+  --data-urlencode "gateway_ip=$DEFAULT_GATEWAY" \
+  --data-urlencode "dns_servers=10.0.0.10 10.0.0.11" \
+  --data-urlencode "vlan=$VLAN_ID_INTERNAL")
 
-  SUBNET_ID=$(echo "$SUBNET_CREATE" | jq -r '.id')
+echo "🔍 Raw MAAS API response:"
+echo "$SUBNET_CREATE"
+
+# Now safely parse
+SUBNET_ID=$(echo "$SUBNET_CREATE" | jq -r '.id')
   if [[ -z "$SUBNET_ID" || "$SUBNET_ID" == "null" ]]; then
     echo "❌ Failed to create subnet via API:"
     echo "$SUBNET_CREATE"

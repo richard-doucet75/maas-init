@@ -133,10 +133,12 @@ fi
 
 echo "Retrieved MAAS API key from root context."
 
-# Log in to MAAS CLI as your current user
+# Always remove the profile to avoid any prompts
 maas logout admin 2>/dev/null || true
-maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY" --quiet
+rm -f ~/.maas.cli || true  # Older versions may cache prompts here
 
+# Login cleanly with the API key
+maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY"
 
 echo "==============================="
 echo "🌐 Enabling DHCP on subnet"

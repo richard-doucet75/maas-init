@@ -104,8 +104,12 @@ if [[ -z "$SUBNET_ID" ]]; then
         VLAN_ID_INTERNAL=$(maas admin vlans create "$FABRIC_ID" name="untagged-$VLAN_ID" vid="$VLAN_ID" mtu=1500 | jq -r '.id')
     fi
 
-    # Associate VLAN to an interface on the rack controller
-    RACK_ID=$(maas admin rack-controllers read | jq -r '.[0].system_id')
+    # Wait for rack controller to register
+    until RACK_ID=$(maas admin rack-controllers read | jq -r '.[0].system_id'); [[ "$RACK_ID" != "null" && -n "$RACK_ID" ]]; do
+        echo "Waiting for rack controller to register..."
+        sleep 2
+    done
+
     INTERFACE_ID=$(maas admin interfaces read "$RACK_ID" | jq -r '.[0].id')
     if [[ -n "$INTERFACE_ID" ]]; then
         maas admin interface update "$RACK_ID" "$INTERFACE_ID" vlan="$VLAN_ID_INTERNAL"

@@ -105,7 +105,12 @@ if [[ -z "$SUBNET_ID" ]]; then
     fi
 
     # Wait for rack controller to register
-    until RACK_ID=$(maas admin rack-controllers read | jq -r '.[0].system_id'); [[ "$RACK_ID" != "null" && -n "$RACK_ID" ]]; do
+    RACK_ID=""
+    while true; do
+        RACK_ID=$(maas admin rack-controllers read | jq -r '.[0].system_id')
+        if [[ -n "$RACK_ID" && "$RACK_ID" != "null" ]]; then
+            break
+        fi
         echo "Waiting for rack controller to register..."
         sleep 2
     done

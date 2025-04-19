@@ -150,6 +150,18 @@ if ! maas admin users read >/dev/null 2>&1; then
   exit 1
 fi
 
+# Prompt for next_server (TFTP provider) with default to MAAS_IP
+read -p "Enter IP for 'next_server' (default: MAAS server IP $MAAS_IP): " NEXT_SERVER
+NEXT_SERVER=${NEXT_SERVER:-$MAAS_IP}
+
+# Detect gateway from default route
+DEFAULT_GATEWAY=$(ip route | grep default | awk '{print $3}')
+if [[ -z "$DEFAULT_GATEWAY" ]]; then
+  echo "❌ Could not determine default gateway. Please specify manually."
+  exit 1
+fi
+echo "✅ Detected default gateway: $DEFAULT_GATEWAY"
+
 # Attempt to find an existing subnet that matches the MAAS IP
 SUBNET_ID=$(maas admin subnets read 2>/dev/null | jq -r --arg MAAS_IP "$MAAS_IP" '
   .[] | select(.cidr != null and ($MAAS_IP | startswith(.cidr | split("/")[0]))) | .id' | head -n1)
@@ -199,7 +211,7 @@ if [[ -z "$SUBNET_ID" ]]; then
   # Create the subnet
   SUBNET_CREATE_JSON=$(maas admin subnet create \
     cidr="$BASE_CIDR" \
-    gateway_ip="$MAAS_IP" \
+    gateway_ip="$DEFAULT_GATEWAY" \
     dns_servers="10.0.0.10 10.0.0.11" \
     vlan="$VLAN_ID" 2>&1)
 
@@ -231,14 +243,14 @@ echo "✅ Found rack controller: $RACK_ID"
 # Enable DHCP on the VLAN and assign the rack controller
 maas admin vlan update "$FABRIC_ID" "$VLAN_ID" dhcp_on=true primary_rack="$RACK_ID"
 
-# Update subnet configuration
+# Update subnet configuration with correct gateway and next_server
 maas admin subnet update "$SUBNET_ID" \
-    gateway_ip="${MAAS_IP}" \
+    gateway_ip="$DEFAULT_GATEWAY" \
     dns_servers="10.0.0.10 10.0.0.11" \
     allow_proxy=true \
     active_discovery=true \
     boot_file="pxelinux.0" \
-    next_server="${MAAS_IP}"
+    next_server="$NEXT_SERVER"
    
 echo "==============================="
 echo "✅ MAAS has been successfully set up!"

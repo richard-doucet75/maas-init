@@ -87,6 +87,9 @@ maas admin users read >/dev/null
 FABRIC_ID=$(maas admin fabrics create name="k8s-fabric" | jq -r '.id')
 
 # Update default VLAN (ID 5001) in fabric 1 to ID 40, rename it
-maas admin vlan update 1 5001 name="home-lab" vid=40 mtu=1500
+curl -s -X PUT http://localhost:5240/MAAS/api/2.0/vlans/5001/ \
+  -H "Authorization: OAuth $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "home-lab", "vid": 40, "mtu": 1500}'
 
 echo "✅ MAAS setup complete. Fabric 'k8s-fabric' created. Default VLAN updated to ID 40 and renamed to 'home-lab'. Ready for manual DHCP configuration."

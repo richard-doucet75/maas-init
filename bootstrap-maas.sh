@@ -89,12 +89,12 @@ BASE_CIDR=$(echo "$MAAS_IP" | awk -F. '{printf "%s.%s.%s.0/24", $1, $2, $3}')
 SUBNET_ID=$(maas admin subnets read | jq -r --arg CIDR "$BASE_CIDR" '.[] | select(.cidr == $CIDR) | .id')
 
 if [[ -z "$SUBNET_ID" ]]; then
-    FABRIC_ID=$(maas admin fabrics read | jq -r '.[0].id // empty')
+    FABRIC_ID=$(maas admin fabrics read | jq -r '.[0].id')
 
-    if [[ -z "$FABRIC_ID" ]]; then
-        echo "❌ Could not retrieve a valid FABRIC_ID from MAAS. Exiting."
-        maas admin fabrics read
-        exit 1
+    if [[ -z "$FABRIC_ID" || "$FABRIC_ID" == "null" ]]; then
+        echo "⚠️ No existing fabric found. Creating a new fabric..."
+        FABRIC_ID=$(maas admin fabrics create name="bootstrap-fabric" | jq -r '.id')
+        echo "✅ Created fabric with ID: $FABRIC_ID"
     fi
 
     VLAN_JSON=$(maas admin vlans read "$FABRIC_ID" | jq -r --arg vid "$VLAN_ID" '.[] | select(.vid == ($vid | tonumber))')

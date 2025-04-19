@@ -86,10 +86,13 @@ maas admin users read >/dev/null
 # Create fabric
 FABRIC_ID=$(maas admin fabrics create name="k8s-fabric" | jq -r '.id')
 
-# Update default VLAN (ID 5001) in fabric 1 to ID 40, rename it
-curl -s -X PUT http://localhost:5240/MAAS/api/2.0/vlans/5001/ \
-  -H "Authorization: OAuth $API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "home-lab", "vid": 40, "mtu": 1500}'
+# Create VLAN 40 on the new fabric
+VLAN_ID=$(maas admin vlans create "$FABRIC_ID" name="home-lab" vid=40 mtu=1500 | jq -r '.id')
 
-echo "✅ MAAS setup complete. Fabric 'k8s-fabric' created. Default VLAN updated to ID 40 and renamed to 'home-lab'. Ready for manual DHCP configuration."
+# Delete VLAN 0 (untagged) if it exists on the same fabric
+DEFAULT_VLAN_ID=$(maas admin vlans read "$FABRIC_ID" | jq -r '.[] | select(.vid == 0) | .id')
+if [[ -n "$DEFAULT_VLAN_ID" ]]; then
+  maas admin vlan delete "$FABRIC_ID" "$DEFAULT_VLAN_ID"
+fi
+
+echo "✅ MAAS setup complete. Fabric 'k8s-fabric' created. VLAN 'home-lab' (VID 40) created. Default untagged VLAN removed."

@@ -93,7 +93,7 @@ echo "🌐 Enabling DHCP on subnet"
 echo "==============================="
 
 echo "🔐 Verifying MAAS login and API access..."
-if ! maas admin users read >/dev/null 2>&1; then
+if ! sudo maas admin users read >/dev/null 2>&1; then
   echo "❌ MAAS CLI login appears invalid."
   exit 1
 fi
@@ -109,56 +109,33 @@ fi
 BASE_CIDR=$(echo "$MAAS_IP" | awk -F. '{printf "%s.%s.%s.0/24", $1, $2, $3}')
 echo "→ Will create subnet: $BASE_CIDR"
 
-SUBNET_ID=$(maas admin subnets read | jq -r --arg CIDR "$BASE_CIDR" '.[] | select(.cidr == $CIDR) | .id')
+# Check for existing subnet
+SUBNET_ID=$(sudo maas admin subnets read | jq -r --arg CIDR "$BASE_CIDR" '.[] | select(.cidr == $CIDR) | .id')
 
 if [[ -z "$SUBNET_ID" ]]; then
   echo "⚠️ No existing subnet found for $BASE_CIDR. Creating it..."
 
-  FABRIC_ID=$(maas admin fabrics read | jq -r '.[0].id // empty')
+  FABRIC_ID=$(sudo maas admin fabrics read | jq -r '.[0].id // empty')
   if [[ -z "$FABRIC_ID" ]]; then
     echo "⚠️ No existing fabric found. Creating 'bootstrap-fabric'..."
-    FABRIC_CREATE=$(maas admin fabrics create name="bootstrap-fabric")
+    FABRIC_CREATE=$(sudo maas admin fabrics create name="bootstrap-fabric")
     FABRIC_ID=$(echo "$FABRIC_CREATE" | jq -r '.id')
     echo "✅ Created new fabric 'bootstrap-fabric' with ID $FABRIC_ID"
   fi
 
-  VLAN_INFO=$(maas admin vlans read "$FABRIC_ID")
+  VLAN_INFO=$(sudo maas admin vlans read "$FABRIC_ID")
   VLAN_JSON=$(echo "$VLAN_INFO" | jq -r --arg vid "$VLAN_ID" '.[] | select(.vid == ($vid | tonumber))')
   VLAN_ID_INTERNAL=$(echo "$VLAN_JSON" | jq -r .id)
 
   if [[ -z "$VLAN_ID_INTERNAL" || "$VLAN_ID_INTERNAL" == "null" ]]; then
     echo "⚠️ VLAN ID $VLAN_ID not found on fabric $FABRIC_ID. Creating it..."
-    VLAN_CREATE=$(maas admin vlans create "$FABRIC_ID" name="untagged-$VLAN_ID" vid="$VLAN_ID" mtu=1500)
+    VLAN_CREATE=$(sudo maas admin vlans create "$FABRIC_ID" name="untagged-$VLAN_ID" vid="$VLAN_ID" mtu=1500)
     VLAN_ID_INTERNAL=$(echo "$VLAN_CREATE" | jq -r '.id')
     echo "✅ Created VLAN $VLAN_ID with internal ID $VLAN_ID_INTERNAL"
   fi
 
   echo "🌐 Using MAAS API to create subnet $BASE_CIDR"
-  # Retry getting API key
-  MAX_RETRIES=3
-  RETRY_DELAY=2
-  ATTEMPT=1
-  API_KEY=""
-
-  while [[ $ATTEMPT -le $MAX_RETRIES ]]; do
-    echo "🔐 Attempt $ATTEMPT to retrieve MAAS API key..."
-    API_KEY=$(sudo maas apikey --username admin 2>/dev/null)
-
-    if [[ -n "$API_KEY" ]]; then
-      echo "✅ Retrieved MAAS API key."
-      break
-    fi
-
-    echo "❌ Failed to retrieve API key. Retrying in $RETRY_DELAY seconds..."
-    sleep "$RETRY_DELAY"
-    ATTEMPT=$((ATTEMPT + 1))
-    RETRY_DELAY=$((RETRY_DELAY * 2))
-  done
-
-  if [[ -z "$API_KEY" ]]; then
-    echo "🚨 Could not retrieve MAAS API key after $MAX_RETRIES attempts. Exiting."
-    exit 1
-  fi
+  API_KEY=$(sudo maas apikey --username admin)
 
   MAAS_URL="http://localhost:5240/MAAS"
   SUBNET_CREATE=$(curl -s -H "Authorization: OAuth $API_KEY" \
@@ -182,18 +159,16 @@ if [[ -z "$SUBNET_ID" ]]; then
   fi
 else
   echo "✅ Found existing subnet $BASE_CIDR with ID $SUBNET_ID"
-  VLAN_ID_INTERNAL=$(maas admin subnet read "$SUBNET_ID" | jq -r '.vlan.id')
-  FABRIC_ID=$(maas admin subnet read "$SUBNET_ID" | jq -r '.vlan.fabric_id')
 fi
 
-# Create dynamic IP range
+# Reserve a dynamic range
 echo "🔧 Reserving DHCP range: 10.0.40.100 - 10.0.40.200"
-maas admin ipranges create type=dynamic start_ip=10.0.40.100 end_ip=10.0.40.200 subnet="$SUBNET_ID" comment="Reserved dynamic range for DHCP"
+sudo maas admin ipranges create type=dynamic start_ip=10.0.40.100 end_ip=10.0.40.200 subnet="$SUBNET_ID" comment="Reserved dynamic range for DHCP"
 
 # Enable DHCP on VLAN
-RACK_ID=$(maas admin rack-controllers read | jq -r '.[0].system_id')
+RACK_ID=$(sudo maas admin rack-controllers read | jq -r '.[0].system_id')
 echo "🔧 Enabling DHCP on VLAN $VLAN_ID_INTERNAL with primary rack: $RACK_ID"
-maas admin vlan update "$FABRIC_ID" "$VLAN_ID_INTERNAL" dhcp_on=true primary_rack="$RACK_ID"
+sudo maas admin vlan update "$FABRIC_ID" "$VLAN_ID" dhcp_on=true primary_rack="$RACK_ID"
 
 echo "==============================="
 echo "✅ DHCP is now active on subnet: $BASE_CIDR"

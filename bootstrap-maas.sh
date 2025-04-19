@@ -6,9 +6,26 @@ set -xe
 read -s -p "Enter PostgreSQL password: " PG_PASSWORD; echo
 read -s -p "Enter MAAS admin password: " MAAS_PASSWORD; echo
 
-# Prompt for optional values
-read -p "Enter MAAS URL (default: http://maas.jaded): " MAAS_URL
-MAAS_URL=${MAAS_URL:-http://maas.jaded}
+# Determine default MAAS host
+DEFAULT_IP=$(hostname -I | awk '{print $1}')
+DEFAULT_HOST="http://${DEFAULT_IP}"
+
+read -p "Enter MAAS hostname or IP (default: ${DEFAULT_HOST}): " MAAS_HOST
+MAAS_HOST=${MAAS_HOST:-$DEFAULT_HOST}
+
+# Normalize MAAS URL with port 5240
+if [[ "$MAAS_HOST" =~ ^http ]]; then
+  MAAS_URL="${MAAS_HOST%/}"
+else
+  MAAS_URL="http://${MAAS_HOST}"
+fi
+
+if [[ ! "$MAAS_URL" =~ :5240$ ]]; then
+  MAAS_URL="${MAAS_URL}:5240"
+fi
+
+MAAS_URL="${MAAS_URL}/"
+echo "Using MAAS URL: $MAAS_URL"
 
 read -p "Enter IP address for MAAS server (leave blank to auto-detect): " MAAS_IP
 if [[ -z "$MAAS_IP" ]]; then
@@ -64,7 +81,7 @@ done
 echo "✅ MAAS API is ready."
 
 # Wait for full region controller API (e.g. subnets)
-until curl -s -f http://localhost:5240/MAAS/api/2.0/ | jq '."subnets"' >/dev/null; do
+until curl -s -f http://localhost:5240/MAAS/api/2.0/ | jq '"subnets"' >/dev/null; do
     echo "Waiting for full MAAS API surface (e.g. subnets)..."
     sleep 2
 done
@@ -109,3 +126,23 @@ RACK_ID=$(maas admin rack-controllers read | jq -r '[.[] | select(.system_id != 
 maas admin vlan update "$FABRIC_ID" "$VLAN_NUMBER" dhcp_on=true
 
 echo "✅ DHCP enabled on VLAN $VLAN_NUMBER (Fabric ID $FABRIC_ID)"
+
+# Set up reverse proxy for external access on port 80
+sudo tee /etc/nginx/sites-available/maas-proxy > /dev/null <<PROXY
+server {
+    listen 80;
+    server_name maas.jaded;
+
+    location / {
+        proxy_pass http://localhost:5240/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+PROXY
+
+sudo ln -sf /etc/nginx/sites-available/maas-proxy /etc/nginx/sites-enabled/maas-proxy
+sudo nginx -t && sudo systemctl reload nginx
+
+echo "✅ MAAS UI is now available at http://maas.jaded"

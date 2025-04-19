@@ -93,7 +93,7 @@ VLAN_ID=$(maas admin vlans create "$FABRIC_ID" name="home-lab" vid=40 mtu=1500 |
 DEFAULT_VLAN_ID=$(maas admin vlans read "$FABRIC_ID" | jq -r '.[] | select(.vid == 0) | .id')
 
 if [[ -n "$DEFAULT_VLAN_ID" ]]; then
-  maas admin vlan delete "$FABRIC_ID" "$DEFAULT_VLAN_ID"
+  maas admin vlan delete 1 0
   echo "✅ VLAN 0 deleted."
 fi
 

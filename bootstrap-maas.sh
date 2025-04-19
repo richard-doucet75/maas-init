@@ -58,6 +58,10 @@ for i in {1..30}; do
     break
   fi
   sleep 2
+  if [[ $i -eq 30 ]]; then
+    echo "🚨 Timed out waiting for MAAS to start."
+    exit 1
+  fi
 done
 
 # Create MAAS admin
@@ -114,13 +118,18 @@ if [[ -z "$SUBNET_ID" ]]; then
     VLAN_CREATE=$(maas admin vlans create "$FABRIC_ID" name="untagged-$VLAN_ID" vid="$VLAN_ID" mtu=1500)
     VLAN_ID_INTERNAL=$(echo "$VLAN_CREATE" | jq -r '.id')
   fi
-  SUBNET_CREATE=$(sudo curl -s -H "Authorization: OAuth $API_KEY" \
+  SUBNET_CREATE=$(curl -s -H "Authorization: OAuth $API_KEY" \
     -H "Accept: application/json" \
     -X POST "http://localhost:5240/MAAS/api/2.0/subnets/" \
     --data-urlencode "cidr=$BASE_CIDR" \
     --data-urlencode "gateway_ip=$DEFAULT_GATEWAY" \
     --data-urlencode "dns_servers=10.0.0.10 10.0.0.11" \
     --data-urlencode "vlan=$VLAN_ID_INTERNAL")
+  if echo "$SUBNET_CREATE" | grep -q "Forbidden"; then
+    echo "❌ MAAS API call to create subnet was forbidden. Check authentication and permissions."
+    echo "$SUBNET_CREATE"
+    exit 1
+  fi
   SUBNET_ID=$(echo "$SUBNET_CREATE" | jq -r '.id')
   if [[ -z "$SUBNET_ID" || "$SUBNET_ID" == "null" ]]; then
     echo "❌ Failed to create subnet via API:"

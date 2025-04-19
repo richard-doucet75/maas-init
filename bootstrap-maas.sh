@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -xe
+set -e
 
 # Prompt for user input
 read -s -p "Enter PostgreSQL password: " PG_PASSWORD

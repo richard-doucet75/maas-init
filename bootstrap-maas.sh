@@ -96,43 +96,46 @@ echo "🔐 Verifying MAAS login and API access..."
 
 # Get API key from sudo context
 API_KEY=$(sudo maas apikey --username admin 2>/dev/null)
+
 if [[ -z "$API_KEY" ]]; then
-  echo "❌ Failed to retrieve MAAS API key from sudo context."
+  echo "❌ Failed to retrieve MAAS API key as root."
   exit 1
 fi
 
-# Clean up any existing local login
+# Clean previous CLI session and login fresh
 maas logout admin 2>/dev/null || true
 rm -f ~/.maas.cli 2>/dev/null || true
 
-# Log in to MAAS as regular user
-maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY"
-
-# Confirm MAAS CLI login works
-if ! maas admin users read >/dev/null 2>&1; then
-  echo "❌ MAAS CLI login appears invalid after login attempt."
+if ! maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY" >/dev/null 2>&1; then
+  echo "❌ MAAS login failed using API key."
   exit 1
 fi
 
-# Determine default gateway
+# Verify login works
+if ! maas admin users read >/dev/null 2>&1; then
+  echo "❌ MAAS CLI login appears invalid even after successful login."
+  exit 1
+fi
+
+# Determine default gateway and CIDR
 DEFAULT_GATEWAY=$(ip route | grep default | awk '{print $3}')
 if [[ -z "$DEFAULT_GATEWAY" ]]; then
   echo "❌ Could not detect default gateway."
   exit 1
 fi
+
 echo "✅ Detected default gateway: $DEFAULT_GATEWAY"
 
-# Calculate base CIDR
 BASE_CIDR=$(echo "$MAAS_IP" | awk -F. '{printf "%s.%s.%s.0/24", $1, $2, $3}')
 echo "→ Will create subnet: $BASE_CIDR"
 
-# Look for existing subnet
+# Check if subnet exists
 SUBNET_ID=$(maas admin subnets read | jq -r --arg CIDR "$BASE_CIDR" '.[] | select(.cidr == $CIDR) | .id')
 
 if [[ -z "$SUBNET_ID" ]]; then
   echo "⚠️ No existing subnet found for $BASE_CIDR. Creating it..."
 
-  # Create or get fabric
+  # Use existing fabric or create new
   FABRIC_ID=$(maas admin fabrics read | jq -r '.[0].id // empty')
   if [[ -z "$FABRIC_ID" ]]; then
     echo "⚠️ No existing fabric found. Creating 'bootstrap-fabric'..."
@@ -141,9 +144,8 @@ if [[ -z "$SUBNET_ID" ]]; then
     echo "✅ Created new fabric 'bootstrap-fabric' with ID $FABRIC_ID"
   fi
 
-  # Create or get VLAN
-  VLAN_INFO=$(maas admin vlans read "$FABRIC_ID")
-  VLAN_JSON=$(echo "$VLAN_INFO" | jq -r --arg vid "$VLAN_ID" '.[] | select(.vid == ($vid | tonumber))')
+  # Use existing VLAN or create new
+  VLAN_JSON=$(maas admin vlans read "$FABRIC_ID" | jq -r --arg vid "$VLAN_ID" '.[] | select(.vid == ($vid | tonumber))')
   VLAN_ID_INTERNAL=$(echo "$VLAN_JSON" | jq -r .id)
 
   if [[ -z "$VLAN_ID_INTERNAL" || "$VLAN_ID_INTERNAL" == "null" ]]; then
@@ -153,11 +155,11 @@ if [[ -z "$SUBNET_ID" ]]; then
     echo "✅ Created VLAN $VLAN_ID with internal ID $VLAN_ID_INTERNAL"
   fi
 
+  # Create subnet via MAAS API
   echo "🌐 Using MAAS API to create subnet $BASE_CIDR"
-  MAAS_URL="http://localhost:5240/MAAS"
   SUBNET_CREATE=$(curl -s -H "Authorization: OAuth $API_KEY" \
     -H "Accept: application/json" \
-    -X POST "$MAAS_URL/api/2.0/subnets/" \
+    -X POST "http://localhost:5240/MAAS/api/2.0/subnets/" \
     --data-urlencode "cidr=$BASE_CIDR" \
     --data-urlencode "gateway_ip=$DEFAULT_GATEWAY" \
     --data-urlencode "dns_servers=10.0.0.10 10.0.0.11" \
@@ -165,23 +167,23 @@ if [[ -z "$SUBNET_ID" ]]; then
 
   SUBNET_ID=$(echo "$SUBNET_CREATE" | jq -r '.id')
   if [[ -z "$SUBNET_ID" || "$SUBNET_ID" == "null" ]]; then
-    echo "❌ Failed to create subnet via MAAS API:"
+    echo "❌ Failed to create subnet via API:"
     echo "$SUBNET_CREATE"
     exit 1
-  else
-    echo "✅ Subnet $BASE_CIDR created with ID $SUBNET_ID"
   fi
+
+  echo "✅ Subnet $BASE_CIDR created with ID $SUBNET_ID"
 else
   echo "✅ Found existing subnet $BASE_CIDR with ID $SUBNET_ID"
 fi
 
 # Reserve DHCP dynamic range
 echo "🔧 Reserving DHCP range: 10.0.40.100 - 10.0.40.200"
-maas admin ipranges create type=dynamic start_ip=10.0.40.100 end_ip=10.0.40.200 subnet="$SUBNET_ID" comment="DHCP range"
+maas admin ipranges create type=dynamic start_ip=10.0.40.100 end_ip=10.0.40.200 subnet="$SUBNET_ID" comment="Reserved dynamic range for DHCP"
 
-# Enable DHCP on the VLAN
+# Enable DHCP
 RACK_ID=$(maas admin rack-controllers read | jq -r '.[0].system_id')
-echo "🔧 Enabling DHCP on VLAN $VLAN_ID_INTERNAL with primary rack: $RACK_ID"
+echo "🔧 Enabling DHCP on VLAN $VLAN_ID with primary rack: $RACK_ID"
 maas admin vlan update "$FABRIC_ID" "$VLAN_ID" dhcp_on=true primary_rack="$RACK_ID"
 
 echo "==============================="

@@ -136,7 +136,7 @@ echo "Retrieved MAAS API key for local user."
 
 # Log in to MAAS CLI as current user
 maas logout admin 2>/dev/null || true
-maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY"
+maas login admin "http://localhost:5240/MAAS/api/2.0/" "$API_KEY" --quiet
 
 echo "==============================="
 echo "🌐 Enabling DHCP on subnet"

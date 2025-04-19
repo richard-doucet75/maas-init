@@ -161,27 +161,17 @@ if [[ -z "$SUBNET_ID" ]]; then
   BASE_CIDR=$(echo "$MAAS_IP" | awk -F. '{printf "%s.%s.%s.0/24", $1, $2, $3}')
   echo "→ Will create subnet: $BASE_CIDR"
 
-  # Try to find or create the fabric
-  FABRIC_NAME="fabric-0"
-  FABRIC_JSON=$(maas admin fabrics read 2>/dev/null || echo "")
-  FABRIC_ID=$(echo "$FABRIC_JSON" | jq -r --arg name "$FABRIC_NAME" '.[] | select(.name == $name) | .id')
+  # Grab the first fabric ID MAAS gives us
+FABRIC_ID=$(maas admin fabrics read | jq -r '.[0].id')
 
-  if [[ -z "$FABRIC_ID" ]]; then
-    echo "⚠️ Fabric '$FABRIC_NAME' not found. Creating it..."
-    FABRIC_CREATE_JSON=$(maas admin fabrics create name="$FABRIC_NAME" 2>&1)
-    if echo "$FABRIC_CREATE_JSON" | jq -e .id >/dev/null 2>&1; then
-      FABRIC_ID=$(echo "$FABRIC_CREATE_JSON" | jq -r '.id')
-      echo "✅ Created fabric '$FABRIC_NAME' with ID $FABRIC_ID"
-    else
-      echo "❌ Failed to create fabric '$FABRIC_NAME'."
-      echo "↪ MAAS response: $FABRIC_CREATE_JSON"
-      exit 1
-    fi
-  else
-    echo "✅ Found existing fabric '$FABRIC_NAME' with ID $FABRIC_ID"
-  fi
+if [[ -z "$FABRIC_ID" ]]; then
+  echo "❌ No fabric found. MAAS might not be fully initialized."
+  exit 1
+fi
 
+echo "✅ Using existing fabric with ID $FABRIC_ID"
   # Check if VLAN exists or create it
+  
   VLAN_EXISTS=$(maas admin vlan read "$FABRIC_ID" "$VLAN_ID" 2>/dev/null || echo "")
   if [[ -z "$VLAN_EXISTS" ]]; then
     echo "⚠️ VLAN ID $VLAN_ID not found on fabric $FABRIC_NAME. Creating it..."

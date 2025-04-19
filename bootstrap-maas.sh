@@ -214,8 +214,12 @@ fi
 
 MAAS_URL="http://localhost:5240/MAAS"
 
-  echo "🌐 Using MAAS API to create subnet $BASE_CIDR"
-SUBNET_CREATE=$(curl -s -H "Authorization: OAuth $API_KEY" \
+  # Construct proper OAuth 1.0 header from the 3-part API key
+OAUTH_HEADER=$(echo "$API_KEY" | awk -F: '{printf "OAuth oauth_consumer_key=\"%s\", oauth_token=\"%s\", oauth_signature_method=\"PLAINTEXT\", oauth_signature=\"%s&\"", $1, $2, $3}')
+
+echo "🌐 Using MAAS API to create subnet $BASE_CIDR"
+
+SUBNET_CREATE=$(curl -s -H "Authorization: $OAUTH_HEADER" \
   -H "Accept: application/json" \
   -X POST "$MAAS_URL/api/2.0/subnets/" \
   --data-urlencode "cidr=$BASE_CIDR" \
@@ -228,16 +232,14 @@ echo "$SUBNET_CREATE"
 
 # Now safely parse
 SUBNET_ID=$(echo "$SUBNET_CREATE" | jq -r '.id')
-  if [[ -z "$SUBNET_ID" || "$SUBNET_ID" == "null" ]]; then
-    echo "❌ Failed to create subnet via API:"
-    echo "$SUBNET_CREATE"
-    exit 1
-  else
-    echo "✅ Subnet $BASE_CIDR created with ID $SUBNET_ID"
-  fi
+if [[ -z "$SUBNET_ID" || "$SUBNET_ID" == "null" ]]; then
+  echo "❌ Failed to create subnet via API:"
+  echo "$SUBNET_CREATE"
+  exit 1
 else
-  echo "✅ Found existing subnet $BASE_CIDR with ID $SUBNET_ID"
+  echo "✅ Subnet $BASE_CIDR created with ID $SUBNET_ID"
 fi
+
 
 # Reserve a dynamic range
 echo "🔧 Reserving DHCP range: 10.0.40.100 - 10.0.40.200"

@@ -239,7 +239,13 @@ echo "✅ Found rack controller: $RACK_ID"
 # Enable DHCP on the VLAN and assign the rack controller
 maas admin vlan update "$FABRIC_ID" "$VLAN_ID" dhcp_on=true primary_rack="$RACK_ID"
 
-# Update subnet configuration with correct gateway and next_server
+# Update subnet configuration
+DEFAULT_GATEWAY=$(ip route | grep default | awk '{print $3}')
+if [[ -z "$DEFAULT_GATEWAY" ]]; then
+  echo "❌ Could not determine default gateway. Please specify manually."
+  exit 1
+fi
+
 maas admin subnet update "$SUBNET_ID" \
     gateway_ip="$DEFAULT_GATEWAY" \
     dns_servers="10.0.0.10 10.0.0.11" \
@@ -247,7 +253,8 @@ maas admin subnet update "$SUBNET_ID" \
     active_discovery=true \
     boot_file="pxelinux.0" \
     next_server="10.0.40.50"
-   
+
+echo
 echo "==============================="
 echo "✅ MAAS has been successfully set up!"
 echo "    Access it at: $MAAS_URL"

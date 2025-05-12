@@ -1,31 +1,88 @@
-# MAAS Bootstrap Script (Gold Standard v3)
+i# MAAS Bootstrap Scripts
 
-This script automates a clean, repeatable setup of MAAS (Metal as a Service) using PostgreSQL and NGINX on Ubuntu 24.04. It's built to reflect production-like patterns while keeping things simple and transparent.
+This repository contains a modular, script-based workflow for fully installing, configuring, and launching [MAAS](https://maas.io/) (Metal as a Service) using Ubuntu Snap packages and PostgreSQL.
 
-## 🔧 Features
+---
 
-- 💣 Cleans any previous MAAS and PostgreSQL install
-- 📦 Installs PostgreSQL 16 and MAAS 3.6 from Snap
-- 🧑 Creates PostgreSQL role/database for MAAS
-- 🌐 Configures NGINX reverse proxy (MAAS accessible at `http://maas.jaded/`)
-- 🚦 Initializes MAAS with full non-interactive setup
-- 🧹 Automatically handles Snap state wipe and directory recreation to prevent known startup crashes
+## 🚀 Features
 
-## ✅ Fixes / Improvements in v3
+* Interactive `.env` configuration
+* Secure runtime password prompts
+* Modular scripts for:
 
-- Replaces old `systemctl stop snap.maas.supervisor.service` with `snap stop maas`
-- Ensures the required `/var/snap/maas/common/maas/image-storage/bootloaders` directory exists (fixes `FileNotFoundError`)
-- Script works cleanly on MAAS 3.6 + Ubuntu 24.04 (noble)
+  * PostgreSQL setup
+  * MAAS initialization
+  * Network + DHCP config
+  * Admin user creation
+  * Reverse proxy setup (Nginx)
+* Clean, repeatable automation
+* MIT Licensed (see `LICENSE`)
 
-## 📋 Requirements
+---
 
-- Ubuntu 24.04 LTS (tested)
-- Internet access (for Snap & APT installs)
-- Sudo privileges
+## 🔧 Setup Instructions
 
-## 🚀 Usage
+1. **Clone the repo** (excluding private `.env`):
 
-Make it executable:
+   ```bash
+   git clone https://github.com/your-username/maas-init.git
+   cd maas-init
+   ```
 
-```bash
-chmod +x bootstrap-maas.sh
+2. **Run the bootstrap process**:
+
+   ```bash
+   ./bootstrap-maas.sh
+   ```
+
+3. **Follow the prompts** to:
+
+   * Wipe an existing install (optional)
+   * Configure network and subnet details
+   * Supply admin and DB passwords (not stored)
+
+4. **Access MAAS**:
+
+   * URL: `http://<your-ip>`
+   * Username: `admin`
+   * Password: (what you entered at install time)
+
+---
+
+## 📁 Directory Overview
+
+| File                 | Purpose                               |
+| -------------------- | ------------------------------------- |
+| `bootstrap-maas.sh`  | Full setup orchestrator               |
+| `configure.sh`       | Interactive config for `.env`         |
+| `install.sh`         | Installs MAAS and PostgreSQL          |
+| `login.sh`           | Logs into the MAAS CLI using API key  |
+| `finalize.sh`        | Finalizes MAAS settings via CLI       |
+| `dhcp_setup.sh`      | Fabric + VLAN + Subnet + DHCP setup   |
+| `remove-snippets.sh` | Deletes old DHCP snippets (optional)  |
+| `proxy.sh`           | Nginx reverse proxy for web access    |
+| `.gitignore`         | Excludes `.env`, keys, and temp files |
+| `LICENSE`            | MIT License                           |
+
+---
+
+## 🔐 Security
+
+* `.env` is excluded from Git and should be stored **privately**
+* Passwords are prompted at runtime and never written to disk
+
+---
+
+## 🥪 Requirements
+
+* Ubuntu 22.04+ or 24.04+
+* Snap support
+* Internet access for image imports
+* `jq`, `curl`, and `nginx` (installed automatically if missing)
+
+---
+
+## 👤 Author
+
+Richard Doucet
+MIT License © 2025

@@ -1,0 +1,15 @@
+# Ignore environment configuration
+.env
+
+# SSH keys (if generated during setup)
+id_rsa
+id_rsa.pub
+
+# Editor/OS files
+*.swp
+*.swo
+*.bak
+.DS_Store
+
+# Logs or debugging output
+*.log
